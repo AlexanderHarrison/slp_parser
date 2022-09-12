@@ -1,27 +1,21 @@
-use slippi_situation_parser::{parser, Frame, Port};
+use slippi_situation_parser::{parse_game, Port};
 
 fn main() {
     let path = std::env::args_os().nth(1).expect("no path given");
     let path = std::path::Path::new(&path);
 
-    let slippi_file = std::fs::File::open(path).expect("error opening slippi file");
-    let mut reader = std::io::BufReader::new(slippi_file);
-    let game = peppi::game(&mut reader, None, None).expect("error parsing slippi file");
+    let mut c = 0;
+    use std::io::Read;
 
-    let frames = match game.frames {
-        peppi::model::game::Frames::P2(frames) => frames
-            .into_iter()
-            .map(|f| f.ports[Port::High as usize].leader)
-            .collect::<Vec<Frame>>(),
-        _ => panic!("only games with 2 players are supported"),
-    };
-
-    let mut count = 0;
-
+    let mut slippi_file = std::fs::File::open(path).expect("error opening slippi file");
+    let mut buf = Vec::new();
+    slippi_file.read_to_end(&mut buf).unwrap();
+    let timer = std::time::Instant::now();
     for _ in 0..1000 {
-        let parsed = parser::parse(&frames);
-        count += parsed.len();
+        let parsed = parse_game(path, Port::High);
+        c += parsed.len()
     }
 
-    println!("{} actions", count);
+    println!("{:?} per iteration", timer.elapsed() / 1000);
+    println!("{:?}", c);
 }

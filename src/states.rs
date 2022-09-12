@@ -1,4 +1,4 @@
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum BroadState {
     Attack,
     Air,
@@ -20,9 +20,21 @@ pub enum BroadState {
     Spotdodge,
 }
 
+#[derive(Copy, Clone, Debug)]
+#[repr(u8)]
+pub enum ActionableState {
+    Air,
+    Ground,
+    Dash,
+    Run,
+    Shield,
+    Ledge,
+}
+
 /// Multi-frame actions.
 /// Must be derivable from a sequence of BroadStates.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
+#[repr(u8)]
 pub enum HighLevelAction {
     GroundAttack(GroundAttack),
     Aerial(AirAttack),
@@ -63,13 +75,13 @@ pub enum HighLevelAction {
     Hitstun,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum AttackType {
     GroundAttack(GroundAttack),
     AirAttack(AirAttack),
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum LedgeAction {
     Attack,
     Jump,
@@ -77,7 +89,7 @@ pub enum LedgeAction {
     GetUp,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum GroundAttack {
     Utilt,
     Ftilt,
@@ -89,7 +101,7 @@ pub enum GroundAttack {
     DashAttack,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum AirAttack {
     Nair,
     Uair,
@@ -98,17 +110,76 @@ pub enum AirAttack {
     Dair,
 }
 
-impl From<peppi::model::enums::action_state::State> for MeleeState {
-    fn from(s: peppi::model::enums::action_state::State) -> Self {
-        Self::from_peppi(s)
+#[derive(Copy, Clone, Debug)]
+#[repr(u8)]
+pub enum Character {
+    Mario          = 00,  
+    Fox            = 01,  
+    CaptainFalcon  = 02,  
+    DonkeyKong     = 03,  
+    Kirby          = 04,  
+    Bowser         = 05,  
+    Link           = 06,  
+    Sheik          = 07,  
+    Ness           = 08,  
+    Peach          = 09,  
+    Popo           = 10,  
+    Nana           = 11,  
+    Pikachu        = 12,  
+    Samus          = 13,  
+    Yoshi          = 14,  
+    Jigglypuff     = 15,  
+    Mewtwo         = 16,  
+    Luigi          = 17,  
+    Marth          = 18,  
+    Zelda          = 19,  
+    YoungLink      = 20,  
+    DrMario        = 21,  
+    Falco          = 22,  
+    Pichu          = 23,  
+    GameAndWatch   = 24,  
+    Ganondorf      = 25,  
+    Roy            = 26,  
+}                            
+
+impl Character {
+    pub fn from_u8(n: u8) -> Option<Self> {
+        if n > 26 { return None }
+        Some(unsafe { std::mem::transmute(n) })
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+#[repr(u16)]
+pub enum Stage {
+    FountainOfDreams = 02,
+    PokemonStadium   = 03,
+    YoshisStory      = 08,
+    DreamLand64      = 28,
+    Battlefield      = 31,
+    FinalDestination = 32,
+}                            
+
+impl Stage {
+    pub fn from_u16(st: u16) -> Option<Self> {
+        Some(match st {
+            02 => Stage::FountainOfDreams,
+            03 => Stage::PokemonStadium,
+            08 => Stage::YoshisStory,
+            28 => Stage::DreamLand64,
+            31 => Stage::Battlefield,
+            32 => Stage::FinalDestination,
+            _  => return None,
+        })
     }
 }
 
 impl MeleeState {
-    pub fn from_peppi(st: peppi::model::enums::action_state::State) -> Self {
-        if let peppi::model::enums::action_state::State::Common(c) = st {
-            unsafe { std::mem::transmute(c) }
+    pub fn from_u16(st: u16) -> Self {
+        if st <= 340 {
+            unsafe { std::mem::transmute(st) }
         } else {
+            //eprintln!("unknown state id: {}", st);
             MeleeState::Passive // TODO:
         }
     }
@@ -122,6 +193,33 @@ impl MeleeState {
             CliffAttackSlow | CliffAttackQuick => Attack,
             CliffEscapeSlow | CliffEscapeQuick => Roll,
             CliffJumpSlow1 | CliffJumpSlow2 | CliffJumpQuick1 | CliffJumpQuick2 => Jump, 
+            _ => return None,
+        })
+    }
+
+    pub fn actionable_state(self) -> Option<ActionableState> {
+        use BroadState::*;
+
+        Some(match self.broad_state() {
+            Air     => ActionableState::Air,
+            Ground  => ActionableState::Ground,
+            Walk    => ActionableState::Ground,
+            DashRun => match self {
+                MeleeState::TurnRun   => ActionableState::Run,
+                MeleeState::Dash      => ActionableState::Dash,
+                MeleeState::Run       => ActionableState::Run,            
+                MeleeState::RunDirect => ActionableState::Run,           
+                MeleeState::RunBrake  => ActionableState::Run,           
+                _ => unreachable!(),
+            },
+            Shield  => ActionableState::Shield,
+            Ledge   => match self {
+                MeleeState::CliffCatch => return None,
+                MeleeState::CliffWait  => ActionableState::Ledge,
+                _ => unreachable!(),
+            },
+            AirJump => ActionableState::Air,
+            Crouch  => ActionableState::Ground,
             _ => return None,
         })
     }
@@ -514,7 +612,7 @@ impl MeleeState {
     }
 }
 
-#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialOrd, Ord, PartialEq, Eq)]
 #[repr(u16)]
 pub enum MeleeState {
 	DeadDown                = 000,
@@ -931,6 +1029,20 @@ impl fmt::Display for GroundAttack {
             Dsmash      => write!(f, "Dsmash"),
             Fsmash      => write!(f, "Fsmash"),
             DashAttack  => write!(f, "Dash attack"),
+        }
+    }                                   
+}                                       
+
+impl fmt::Display for ActionableState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use ActionableState::*;
+        match self {
+            Air    => write!(f, "Airborne"),
+            Ground => write!(f, "Grounded"),
+            Dash   => write!(f, "Dashing"),
+            Run    => write!(f, "Running"),
+            Shield => write!(f, "Shielding"),
+            Ledge  => write!(f, "On ledge"),
         }
     }                                   
 }                                       
