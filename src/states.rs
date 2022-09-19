@@ -959,8 +959,8 @@ pub enum MeleeState {
 }
 
 impl HighLevelAction {
-    const MAX_VALUE: u8 = 63;
-    const VARIANT_COUNT: u8 = 64;
+    pub const MAX_VALUE: u8 = 63;
+    pub const VARIANT_COUNT: u8 = 64;
 
     pub fn from_u8(n: u8) -> Option<Self> {
         use HighLevelAction as HLA;
