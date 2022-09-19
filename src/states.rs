@@ -959,6 +959,9 @@ pub enum MeleeState {
 }
 
 impl HighLevelAction {
+    const MAX_VALUE: u8 = 63;
+    const VARIANT_COUNT: u8 = 64;
+
     pub fn from_u8(n: u8) -> Option<Self> {
         use HighLevelAction as HLA;
         Some(match n {
@@ -1032,8 +1035,8 @@ impl HighLevelAction {
             60 => HLA::RollForward                           ,
             61 => HLA::RollBackward                          ,
             62 => HLA::Crouch                                ,
-            63 => HLA::Hitstun                               ,
-            64.. => return None,
+            Self::MAX_VALUE => HLA::Hitstun                               ,
+            Self::VARIANT_COUNT.. => return None,
         })
     }
 
@@ -1110,7 +1113,7 @@ impl HighLevelAction {
             HLA::RollForward                            => 60,
             HLA::RollBackward                           => 61,
             HLA::Crouch                                 => 62,
-            HLA::Hitstun                                => 63,
+            HLA::Hitstun                                => Self::MAX_VALUE,
         }
     }
 }
