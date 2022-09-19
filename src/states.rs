@@ -958,6 +958,163 @@ pub enum MeleeState {
 	BarrelCannonWait        = 340,
 }
 
+impl HighLevelAction {
+    pub fn from_u8(n: u8) -> Option<Self> {
+        use HighLevelAction as HLA;
+        Some(match n {
+            00 => HLA::GroundAttack(GroundAttack::Utilt     ),
+            01 => HLA::GroundAttack(GroundAttack::Ftilt     ),
+            02 => HLA::GroundAttack(GroundAttack::Dtilt     ),
+            03 => HLA::GroundAttack(GroundAttack::Jab       ),
+            04 => HLA::GroundAttack(GroundAttack::Usmash    ),
+            05 => HLA::GroundAttack(GroundAttack::Dsmash    ),
+            06 => HLA::GroundAttack(GroundAttack::Fsmash    ),
+            07 => HLA::GroundAttack(GroundAttack::DashAttack),
+                  
+            08 => HLA::Aerial(AirAttack::Nair)               ,
+            09 => HLA::Aerial(AirAttack::Uair)               ,
+            10 => HLA::Aerial(AirAttack::Fair)               ,
+            11 => HLA::Aerial(AirAttack::Bair)               ,
+            12 => HLA::Aerial(AirAttack::Dair)               ,
+                  
+            13 => HLA::JumpAerial(AirAttack::Nair)           ,
+            14 => HLA::JumpAerial(AirAttack::Uair)           ,
+            15 => HLA::JumpAerial(AirAttack::Fair)           ,
+            16 => HLA::JumpAerial(AirAttack::Bair)           ,
+            17 => HLA::JumpAerial(AirAttack::Dair)           ,
+                  
+            18 => HLA::Fullhop                               ,
+                  
+            19 => HLA::FullhopAerial(AirAttack::Nair)        , 
+            20 => HLA::FullhopAerial(AirAttack::Uair)        , 
+            21 => HLA::FullhopAerial(AirAttack::Fair)        , 
+            22 => HLA::FullhopAerial(AirAttack::Bair)        , 
+            23 => HLA::FullhopAerial(AirAttack::Dair)        , 
+                  
+            24 => HLA::Shorthop                              ,
+                  
+            25 => HLA::ShorthopAerial(AirAttack::Nair)       ,
+            26 => HLA::ShorthopAerial(AirAttack::Uair)       ,
+            27 => HLA::ShorthopAerial(AirAttack::Fair)       ,
+            28 => HLA::ShorthopAerial(AirAttack::Bair)       ,
+            29 => HLA::ShorthopAerial(AirAttack::Dair)       ,
+                  
+            30 => HLA::Grab                                  ,
+            31 => HLA::GroundWait                            , 
+            32 => HLA::AirWait                               ,
+            33 => HLA::AirJump                               ,
+            34 => HLA::Airdodge                              ,
+            35 => HLA::LedgeWait                             , 
+            36 => HLA::LedgeDash                             ,
+            37 => HLA::LedgeRoll                             ,
+            38 => HLA::LedgeJump                             ,
+            39 => HLA::LedgeHop                              ,
+            40 => HLA::LedgeAerial(AirAttack::Nair)          ,
+            41 => HLA::LedgeAerial(AirAttack::Uair)          ,
+            42 => HLA::LedgeAerial(AirAttack::Fair)          ,
+            43 => HLA::LedgeAerial(AirAttack::Bair)          ,
+            44 => HLA::LedgeAerial(AirAttack::Dair)          ,
+            45 => HLA::LedgeGetUp                            ,
+            46 => HLA::LedgeAttack                           ,
+            47 => HLA::LedgeDrop                             ,
+            48 => HLA::WavedashRight                         ,
+            49 => HLA::WavedashDown                          ,
+            50 => HLA::WavedashLeft                          ,
+            51 => HLA::WavelandRight                         , 
+            52 => HLA::WavelandDown                          ,
+            53 => HLA::WavelandLeft                          ,
+            54 => HLA::DashLeft                              ,
+            55 => HLA::DashRight                             ,
+            56 => HLA::WalkLeft                              ,
+            57 => HLA::WalkRight                             ,
+            58 => HLA::Shield                                ,
+            59 => HLA::Spotdodge                             ,
+            60 => HLA::RollForward                           ,
+            61 => HLA::RollBackward                          ,
+            62 => HLA::Crouch                                ,
+            63 => HLA::Hitstun                               ,
+            64.. => return None,
+        })
+    }
+
+    pub fn into_u8(self) -> u8 {
+        use HighLevelAction as HLA;
+        match self {
+            HLA::GroundAttack(GroundAttack::Utilt     ) => 0,
+            HLA::GroundAttack(GroundAttack::Ftilt     ) => 1,
+            HLA::GroundAttack(GroundAttack::Dtilt     ) => 2,
+            HLA::GroundAttack(GroundAttack::Jab       ) => 3,
+            HLA::GroundAttack(GroundAttack::Usmash    ) => 4,
+            HLA::GroundAttack(GroundAttack::Dsmash    ) => 5,
+            HLA::GroundAttack(GroundAttack::Fsmash    ) => 6,
+            HLA::GroundAttack(GroundAttack::DashAttack) => 7,
+
+            HLA::Aerial(AirAttack::Nair)                => 8,
+            HLA::Aerial(AirAttack::Uair)                => 9,
+            HLA::Aerial(AirAttack::Fair)                => 10,
+            HLA::Aerial(AirAttack::Bair)                => 11,
+            HLA::Aerial(AirAttack::Dair)                => 12,
+
+            HLA::JumpAerial(AirAttack::Nair)            => 13,
+            HLA::JumpAerial(AirAttack::Uair)            => 14,
+            HLA::JumpAerial(AirAttack::Fair)            => 15,
+            HLA::JumpAerial(AirAttack::Bair)            => 16,
+            HLA::JumpAerial(AirAttack::Dair)            => 17,
+
+            HLA::Fullhop                                => 18,
+
+            HLA::FullhopAerial(AirAttack::Nair)         => 19, 
+            HLA::FullhopAerial(AirAttack::Uair)         => 20, 
+            HLA::FullhopAerial(AirAttack::Fair)         => 21, 
+            HLA::FullhopAerial(AirAttack::Bair)         => 22, 
+            HLA::FullhopAerial(AirAttack::Dair)         => 23, 
+            
+            HLA::Shorthop                               => 24,
+            
+            HLA::ShorthopAerial(AirAttack::Nair)        => 25,
+            HLA::ShorthopAerial(AirAttack::Uair)        => 26,
+            HLA::ShorthopAerial(AirAttack::Fair)        => 27,
+            HLA::ShorthopAerial(AirAttack::Bair)        => 28,
+            HLA::ShorthopAerial(AirAttack::Dair)        => 29,
+            
+            HLA::Grab                                   => 30,
+            HLA::GroundWait                             => 31, 
+            HLA::AirWait                                => 32,
+            HLA::AirJump                                => 33,
+            HLA::Airdodge                               => 34,
+            HLA::LedgeWait                              => 35, 
+            HLA::LedgeDash                              => 36,
+            HLA::LedgeRoll                              => 37,
+            HLA::LedgeJump                              => 38,
+            HLA::LedgeHop                               => 39,
+            HLA::LedgeAerial(AirAttack::Nair)           => 40,
+            HLA::LedgeAerial(AirAttack::Uair)           => 41,
+            HLA::LedgeAerial(AirAttack::Fair)           => 42,
+            HLA::LedgeAerial(AirAttack::Bair)           => 43,
+            HLA::LedgeAerial(AirAttack::Dair)           => 44,
+            HLA::LedgeGetUp                             => 45,
+            HLA::LedgeAttack                            => 46,
+            HLA::LedgeDrop                              => 47,
+            HLA::WavedashRight                          => 48,
+            HLA::WavedashDown                           => 49,
+            HLA::WavedashLeft                           => 50,
+            HLA::WavelandRight                          => 51, 
+            HLA::WavelandDown                           => 52,
+            HLA::WavelandLeft                           => 53,
+            HLA::DashLeft                               => 54,
+            HLA::DashRight                              => 55,
+            HLA::WalkLeft                               => 56,
+            HLA::WalkRight                              => 57,
+            HLA::Shield                                 => 58,
+            HLA::Spotdodge                              => 59,
+            HLA::RollForward                            => 60,
+            HLA::RollBackward                           => 61,
+            HLA::Crouch                                 => 62,
+            HLA::Hitstun                                => 63,
+        }
+    }
+}
+
 use std::fmt;
 impl fmt::Display for HighLevelAction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -37,6 +37,7 @@ pub struct GameInfo {
     pub high_port_idx: u8,
 }
 
+#[derive(Debug)]
 pub struct Game {
     pub low_port_frames: Vec<Frame>,
     pub high_port_frames: Vec<Frame>,
