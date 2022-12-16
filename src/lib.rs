@@ -6,7 +6,7 @@ use states::*;
 
 #[derive(Clone, Debug)]
 pub struct Action {
-    pub actionable_state: ActionableState,
+    pub start_state: BroadState,
     pub action_taken: HighLevelAction,
     pub frame_start: usize,
     pub frame_end: usize,
@@ -44,6 +44,18 @@ pub struct Game {
     pub game: GameInfo,
 } 
 
+#[derive(Clone, Debug)]
+pub struct InteractionRef<'a> {
+    pub opponent_initiation: &'a Action,
+    pub player_response: &'a Action,
+}
+
+#[derive(Clone, Debug)]
+pub struct Interaction {
+    pub opponent_initiation: Action,
+    pub player_response: Action,
+}
+
 pub fn parse_game(game: &std::path::Path, port: Port) -> Option<Vec<Action>> {
     use std::io::Read;
 
@@ -66,10 +78,46 @@ pub fn parse_buf(buf: &[u8], port: Port) -> Option<Vec<Action>> {
     Some(parser::parse(frames))
 }
 
+macro_rules! unwrap_or {
+    ($opt:expr, $else:expr) => {
+        match $opt {
+            Some(data) => data,
+            None => $else,
+        }
+    }
+}
+
+
+pub fn generate_interactions<'a>(mut player_actions: &'a [Action], mut opponent_actions: &'a [Action]) -> Vec<InteractionRef<'a>> {
+    let mut interactions = Vec::new();
+
+    let mut initiation;
+    let mut response;
+    (initiation, opponent_actions) = unwrap_or!(opponent_actions.split_first(), return interactions);
+    (response, player_actions) = unwrap_or!(player_actions.split_first(), return interactions);
+
+    'outer: loop {
+        while response.frame_start <= initiation.frame_start {
+            (response, player_actions) = unwrap_or!(player_actions.split_first(), break 'outer);
+        }
+
+        interactions.push(InteractionRef { 
+            player_response: response,
+            opponent_initiation: initiation,
+        });
+
+        while initiation.frame_start <= response.frame_start {
+            (initiation, opponent_actions) = unwrap_or!(opponent_actions.split_first(), break 'outer);
+        }
+    }
+
+    interactions
+}
+
 use std::fmt;
 impl fmt::Display for Action {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let prev = format!("{}", self.actionable_state);
+        let prev = format!("{:?}", self.start_state);
         let s = format!("{}", self.action_taken);
         write!(f, "{:10}: {:15}{} -> {}", prev, s, self.frame_start, self.frame_end)
     }

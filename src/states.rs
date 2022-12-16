@@ -20,7 +20,7 @@ pub enum BroadState {
     Spotdodge,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u8)]
 pub enum ActionableState {
     Air,
@@ -33,7 +33,7 @@ pub enum ActionableState {
 
 /// Multi-frame actions.
 /// Must be derivable from a sequence of BroadStates.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u8)]
 pub enum HighLevelAction {
     GroundAttack(GroundAttack),
@@ -73,15 +73,16 @@ pub enum HighLevelAction {
     RollBackward,
     Crouch,
     Hitstun,
+    Walljump,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum AttackType {
     GroundAttack(GroundAttack),
     AirAttack(AirAttack),
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum LedgeAction {
     Attack,
     Jump,
@@ -89,7 +90,7 @@ pub enum LedgeAction {
     GetUp,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum GroundAttack {
     Utilt,
     Ftilt,
@@ -101,7 +102,7 @@ pub enum GroundAttack {
     DashAttack,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum AirAttack {
     Nair,
     Uair,
@@ -110,7 +111,7 @@ pub enum AirAttack {
     Dair,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u8)]
 pub enum Character {
     Mario          = 00,  
@@ -1113,7 +1114,8 @@ impl HighLevelAction {
             HLA::RollForward                            => 60,
             HLA::RollBackward                           => 61,
             HLA::Crouch                                 => 62,
-            HLA::Hitstun                                => Self::MAX_VALUE,
+            HLA::Hitstun                                => 63,
+            HLA::Walljump                               => Self::MAX_VALUE
         }
     }
 }
@@ -1160,6 +1162,7 @@ impl fmt::Display for HighLevelAction {
             RollBackward                => write!(f, "Roll backward"),
             Crouch                      => write!(f, "Crouch"),
             Hitstun                     => write!(f, "In hit"),
+            Walljump                    => write!(f, "Walljump"),
         }
     }                                   
 }                                       

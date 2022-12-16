@@ -4,22 +4,16 @@ use crate::*;
 pub fn parse(frames: &[Frame]) -> Vec<crate::Action> {
     let mut actions = Vec::new();
     let mut consumer = ActionBuilder::new(frames);
-    'actions: while !consumer.finished() {
-        loop {
-            let next_state = match consumer.peek() {
-                Some(m_s) => m_s.actionable_state(),
-                None => break 'actions
-            };
-
-            match next_state {
-                Some(a_s) => break a_s,
-                None => consumer.next(),
-            };
-        };
-
-        consumer.start_action();
-        if let Some(action) = Action::parse_next(&mut consumer) {
-            actions.push(action)
+    while !consumer.finished() {
+        if let Err(_) = consumer.start_action() { break }
+        match Action::parse_next(&mut consumer) {
+            Ok(action) => actions.push(action),
+            Err(ParseError::EOF) => {
+                println!("EOD")
+            },
+            Err(ParseError::Unknown) => {
+                println!("unknown");
+            }
         }
     }
 
@@ -38,10 +32,17 @@ enum CourtesyReturn {
     SkipSome,
     SkipMax,
 }
+
 #[derive(Copy, Clone, Debug)]
 struct Courtesy {
     pub timeout: usize,
     pub state: BroadState,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum ParseError {
+    EOF,
+    Unknown
 }
 
 impl Action {
@@ -83,17 +84,17 @@ impl Action {
     };
 
     // returns None if action is unknown or eof
-    pub fn parse_next(consumer: &mut ActionBuilder) -> Option<Self> {
+    pub fn parse_next(consumer: &mut ActionBuilder) -> Result<Self, ParseError> {
         use BroadState::*;
 
-        let state_1 = consumer.peek()?.broad_state();
-        match state_1 {
+        let state = consumer.peek().ok_or(ParseError::EOF)?.broad_state();
+        match state {
             Attack => Action::parse_attack(consumer),
             Air => Action::parse_courtesy(consumer, Action::AIR_COURTESY, HighLevelAction::AirWait),
             Airdodge => Action::parse_airdodge(consumer),
             SpecialLanding => {
                 consumer.skip_broad_state(SpecialLanding);
-                None
+                Err(ParseError::Unknown)
             }
             Ground => Action::parse_courtesy(consumer, Action::GROUND_COURTESY, HighLevelAction::GroundWait),
             Walk => Action::parse_walk(consumer),
@@ -104,7 +105,7 @@ impl Action {
             Hitstun => Action::parse_hitstun(consumer),
             GenericInactionable => {
                 consumer.skip_broad_state(GenericInactionable);
-                None
+                Err(ParseError::Unknown)
             }
             JumpSquat => Action::parse_jump_squat(consumer),
             AirJump => Action::parse_air_jump(consumer),
@@ -117,12 +118,12 @@ impl Action {
         }
     }
 
-    fn parse_roll(consumer: &mut ActionBuilder) -> Option<Action> {
-        let roll_state = consumer.next()?;
+    fn parse_roll(consumer: &mut ActionBuilder) -> Result<Action, ParseError> {
+        let roll_state = consumer.next().ok_or(ParseError::EOF)?;
         let hla = match roll_state {
             MeleeState::EscapeF => HighLevelAction::RollForward,
             MeleeState::EscapeB => HighLevelAction::RollBackward,
-            _ => return None,
+            _ => return Err(ParseError::Unknown),
         };
 
         Action::parse_simple_action(consumer, BroadState::Roll, hla)
@@ -132,61 +133,67 @@ impl Action {
         consumer: &mut ActionBuilder,
         broad_state: BroadState,
         hla: HighLevelAction,
-    ) -> Option<Action> {
+    ) -> Result<Action, ParseError> {
         consumer.skip_broad_state(broad_state);
-        Some(consumer.finish_action(hla))
+        Ok(consumer.finish_action(hla))
     }
 
-    fn parse_dash(consumer: &mut ActionBuilder) -> Option<Action> {
+    fn parse_dash(consumer: &mut ActionBuilder) -> Result<Action, ParseError> {
+        let debug = consumer.current_frame() == 125;
         let dash_frame = consumer.next_frame().unwrap();
         let dash_hla = match dash_frame.direction {
             Direction::Left => HighLevelAction::DashLeft,
             Direction::Right => HighLevelAction::DashRight,
         };
 
-        Action::parse_courtesy(consumer, Action::DASH_COURTESY, dash_hla)
+        if debug {
+            let d = dbg!(Action::parse_courtesy(consumer, Action::DASH_COURTESY, dash_hla));
+            println!("{}", consumer.current_frame());
+            //println!("Custom backtrace: {}", std::backtrace::Backtrace::force_capture());
+            d
+        } else {
+            Action::parse_courtesy(consumer, Action::DASH_COURTESY, dash_hla)
+        }
     }
 
-    fn parse_attack(consumer: &mut ActionBuilder) -> Option<Action> {
+    fn parse_attack(consumer: &mut ActionBuilder) -> Result<Action, ParseError> {
         let attack_type = Action::parse_attack_to_end(consumer)?;
         let hla = match attack_type {
             AttackType::AirAttack(at) => HighLevelAction::Aerial(at),
             AttackType::GroundAttack(at) => HighLevelAction::GroundAttack(at),
         };
 
-        Some(consumer.finish_action(hla))
+        Ok(consumer.finish_action(hla))
     }
 
-    fn parse_ledge(consumer: &mut ActionBuilder) -> Option<Action> {
+    fn parse_ledge(consumer: &mut ActionBuilder) -> Result<Action, ParseError> {
         use BroadState::*;
 
         if Action::skip_courtesy(consumer, Action::LEDGE_COURTESY) == CourtesyReturn::SkipMax {
-            Some(consumer.finish_action(HighLevelAction::LedgeWait))
+            Ok(consumer.finish_action(HighLevelAction::LedgeWait))
         } else {
-            let post_ledge_state = consumer.peek()?;
+            let post_ledge_state = consumer.peek().ok_or(ParseError::EOF)?;
             match post_ledge_state.broad_state() {
                 LedgeAction => Action::parse_ledge_action(consumer),
                 Hitstun => Action::parse_hitstun(consumer),
                 Air => {
-                    if Action::skip_courtesy(consumer, Action::AIR_COURTESY)
-                        == CourtesyReturn::SkipMax
-                    {
-                        return Some(consumer.finish_action(HighLevelAction::LedgeDrop));
+                    let c_ret = Action::skip_courtesy(consumer, Action::AIR_COURTESY);
+                    if c_ret == CourtesyReturn::SkipMax {
+                        return Ok(consumer.finish_action(HighLevelAction::LedgeDrop));
                     }
 
-                    let next_state = consumer.peek()?;
+                    let next_state = consumer.peek().ok_or(ParseError::EOF)?;
                     match next_state.broad_state() {
                         Hitstun => Action::parse_hitstun(consumer),
                         AirJump => {
                             consumer.next();
-                            if Action::skip_courtesy(consumer, Action::AIRJUMP_COURTESY)
-                                == CourtesyReturn::SkipMax
-                            {
+                            let c_ret = Action::skip_courtesy(consumer, Action::AIRJUMP_COURTESY);
+                            if c_ret == CourtesyReturn::SkipMax {
                                 consumer.skip_broad_state(AirJump);
-                                return Some(consumer.finish_action(HighLevelAction::LedgeHop));
+                                return Ok(consumer.finish_action(HighLevelAction::LedgeHop));
                             }
 
-                            let next_state = consumer.peek()?;
+                            let next_state = consumer.peek().ok_or(ParseError::EOF)?;
                             match next_state.broad_state() {
                                 Airdodge => {
                                     let airdodge_action = Action::parse_airdodge(consumer)?;
@@ -197,7 +204,8 @@ impl Action {
                                         hla => hla,
                                     };
 
-                                    Some(Action {
+                                    // TODO wtf???
+                                    Ok(Action {
                                         action_taken: new_hla,
                                         ..airdodge_action
                                     })
@@ -205,11 +213,11 @@ impl Action {
                                 Attack => {
                                     let attack_type = Action::parse_attack_to_end(consumer)?;
                                     match attack_type {
-                                        AttackType::AirAttack(at) => Some(
+                                        AttackType::AirAttack(at) => Ok(
                                             consumer
                                                 .finish_action(HighLevelAction::LedgeAerial(at)),
                                         ),
-                                        AttackType::GroundAttack(at) => Some(
+                                        AttackType::GroundAttack(at) => Ok(
                                             consumer
                                                 .finish_action(HighLevelAction::GroundAttack(at)),
                                         ),
@@ -217,23 +225,36 @@ impl Action {
                                 }
                                 SpecialLanding => {
                                     consumer.skip_broad_state(SpecialLanding);
-                                    Some(consumer.finish_action(HighLevelAction::LedgeDash))
+                                    Ok(consumer.finish_action(HighLevelAction::LedgeDash))
                                 }
                                 Hitstun => Action::parse_hitstun(consumer),
-                                _ => Some(consumer.finish_action(HighLevelAction::LedgeHop)),
+                                _ => Ok(consumer.finish_action(HighLevelAction::LedgeHop)),
                             }
                         }
-                        _ => Some(consumer.finish_action(HighLevelAction::LedgeDrop)),
+                        _ => Ok(consumer.finish_action(HighLevelAction::LedgeDrop)),
                     }
                 }
-                _ => todo!(),
+                Ground => { 
+                    // happens with randall perhaps?
+                    Ok(consumer.finish_action(HighLevelAction::LedgeDrop))
+                },
+                GenericInactionable => {
+                    // doraki
+                    Ok(consumer.finish_action(HighLevelAction::Walljump))
+                },
+                n => {
+                    println!("not finished {:?}", n);
+                    println!("frame {}", consumer.current_frame());
+                    todo!()
+                }
             }
         }
     }
 
-    fn parse_ledge_action(consumer: &mut ActionBuilder) -> Option<Action> {
-        let ledge_action_state = consumer.peek()?;
-        let ledge_action = ledge_action_state.ledge_action()?;
+    fn parse_ledge_action(consumer: &mut ActionBuilder) -> Result<Action, ParseError> {
+        let ledge_action_state = consumer.peek().ok_or(ParseError::EOF)?;
+        let ledge_action = ledge_action_state.ledge_action()
+            .expect("Expected next action to be a ledge action");
         let hla = match ledge_action {
             LedgeAction::GetUp => HighLevelAction::LedgeGetUp,
             LedgeAction::Attack => HighLevelAction::LedgeAttack,
@@ -242,10 +263,10 @@ impl Action {
         };
 
         consumer.skip_broad_state(BroadState::LedgeAction);
-        Some(consumer.finish_action(hla))
+        Ok(consumer.finish_action(hla))
     }
 
-    fn parse_hitstun(consumer: &mut ActionBuilder) -> Option<Action> {
+    fn parse_hitstun(consumer: &mut ActionBuilder) -> Result<Action, ParseError> {
         let Courtesy { timeout, state } = Action::HITSTUN_COURTESY; // TODO: necessary?
         loop {
             consumer.skip_broad_state(BroadState::Hitstun);
@@ -257,24 +278,24 @@ impl Action {
             }
         }
 
-        Some(consumer.finish_action(HighLevelAction::Hitstun))
+        Ok(consumer.finish_action(HighLevelAction::Hitstun))
     }
 
     fn parse_courtesy(
         consumer: &mut ActionBuilder,
         courtesy: Courtesy,
         wait_action: HighLevelAction,
-    ) -> Option<Action> {
+    ) -> Result<Action, ParseError> {
         if Action::skip_courtesy(consumer, courtesy) == CourtesyReturn::SkipMax {
             // no action
             consumer.skip_broad_state(courtesy.state);
-            Some(consumer.finish_action(wait_action))
+            Ok(consumer.finish_action(wait_action))
         } else {
             Action::parse_next(consumer)
         }
     }
 
-    fn parse_walk(consumer: &mut ActionBuilder) -> Option<Action> {
+    fn parse_walk(consumer: &mut ActionBuilder) -> Result<Action, ParseError> {
         let walk_frame = consumer.next_frame().unwrap();
         let walk_dir = walk_frame.direction;
 
@@ -284,13 +305,13 @@ impl Action {
                 Direction::Left => HighLevelAction::WalkLeft,
                 Direction::Right => HighLevelAction::WalkRight,
             };
-            Some(consumer.finish_action(high_level_action))
+            Ok(consumer.finish_action(high_level_action))
         } else {
             Action::parse_next(consumer)
         }
     }
 
-    fn parse_jump_squat(consumer: &mut ActionBuilder) -> Option<Action> {
+    fn parse_jump_squat(consumer: &mut ActionBuilder) -> Result<Action, ParseError> {
         use BroadState::*;
 
         let jump_type = Action::parse_jump_type(consumer)?;
@@ -301,10 +322,10 @@ impl Action {
 
         if Action::skip_courtesy(consumer, Action::AIR_COURTESY) == CourtesyReturn::SkipMax {
             // no action after jump
-            Some(consumer.finish_action(hla))
+            Ok(consumer.finish_action(hla))
         } else {
             // performed action after jump
-            let state_after_jump = consumer.peek()?;
+            let state_after_jump = consumer.peek().ok_or(ParseError::EOF)?;
             match state_after_jump.broad_state() {
                 Attack => {
                     let attack_type = Action::parse_attack_to_end(consumer)?;
@@ -316,7 +337,7 @@ impl Action {
                         AttackType::GroundAttack(at) => HighLevelAction::GroundAttack(at),
                     };
 
-                    Some(consumer.finish_action(high_level_action))
+                    Ok(consumer.finish_action(high_level_action))
                 }
                 AirJump => Action::parse_air_jump(consumer),
                 Airdodge | SpecialLanding => {
@@ -329,24 +350,25 @@ impl Action {
                         hla => hla,
                     };
 
-                    Some(Action {
+                    // TODO wtf???/
+                    Ok(Action {
                         action_taken: new_hla,
                         ..airdodge_action
                     })
                 }
                 Grab => Action::parse_simple_action(consumer, Grab, HighLevelAction::Grab),
-                _ => Some(consumer.finish_action(hla)),
+                _ => Ok(consumer.finish_action(hla)),
             }
         }
     }
 
-    fn parse_airdodge(consumer: &mut ActionBuilder) -> Option<Action> {
+    fn parse_airdodge(consumer: &mut ActionBuilder) -> Result<Action, ParseError> {
         use BroadState::*;
 
         const EPSILON: f32 = 0.1;
 
         consumer.skip_broad_state(Airdodge);
-        match consumer.peek()?.broad_state() {
+        match consumer.peek().ok_or(ParseError::EOF)?.broad_state() {
             SpecialLanding => {
                 let frame = consumer.next_frame().unwrap();
                 let high_level_action = match frame.velocity.x {
@@ -355,13 +377,13 @@ impl Action {
                     _ => HighLevelAction::WavelandDown,
                 };
                 consumer.skip_broad_state(SpecialLanding);
-                Some(consumer.finish_action(high_level_action))
+                Ok(consumer.finish_action(high_level_action))
             }
-            _ => Some(consumer.finish_action(HighLevelAction::Airdodge)),
+            _ => Ok(consumer.finish_action(HighLevelAction::Airdodge)),
         }
     }
 
-    fn parse_air_jump(consumer: &mut ActionBuilder) -> Option<Action> {
+    fn parse_air_jump(consumer: &mut ActionBuilder) -> Result<Action, ParseError> {
         use BroadState::*;
 
         consumer.next();
@@ -369,31 +391,31 @@ impl Action {
         if Action::skip_courtesy(consumer, Action::AIRJUMP_COURTESY) == CourtesyReturn::SkipMax {
             // so we don't mistakenly parse airjump twice
             consumer.skip_broad_state(AirJump);
-            Some(consumer.finish_action(HighLevelAction::AirJump))
+            Ok(consumer.finish_action(HighLevelAction::AirJump))
         } else {
             // performed action after jump
-            let state_after_jump = consumer.peek()?;
+            let state_after_jump = consumer.peek().ok_or(ParseError::EOF)?;
             match state_after_jump.broad_state() {
                 Attack => {
                     let attack_type = Action::parse_attack_to_end(consumer)?;
                     match attack_type {
                         AttackType::AirAttack(at) => {
-                            Some(consumer.finish_action(HighLevelAction::JumpAerial(at)))
+                            Ok(consumer.finish_action(HighLevelAction::JumpAerial(at)))
                         }
-                        _ => None,
+                        _ => Err(ParseError::Unknown),
                     }
                 }
-                _ => Some(consumer.finish_action(HighLevelAction::AirJump)),
+                _ => Ok(consumer.finish_action(HighLevelAction::AirJump)),
             }
         }
     }
 
-    fn parse_attack_to_end(consumer: &mut ActionBuilder) -> Option<AttackType> {
-        let at = consumer.peek()?;
-        let attack_type = at.attack_type()?;
+    fn parse_attack_to_end(consumer: &mut ActionBuilder) -> Result<AttackType, ParseError> {
+        let at = consumer.peek().ok_or(ParseError::EOF)?;
+        let attack_type = at.attack_type().expect("Expected Attack BroadState");
         consumer.skip_broad_state(BroadState::Attack);
 
-        Some(attack_type)
+        Ok(attack_type)
     }
 
     fn skip_courtesy(consumer: &mut ActionBuilder, c: Courtesy) -> CourtesyReturn {
@@ -406,24 +428,25 @@ impl Action {
         }
     }
 
-    fn parse_jump_type(consumer: &mut ActionBuilder) -> Option<JumpType> {
+    fn parse_jump_type(consumer: &mut ActionBuilder) -> Result<JumpType, ParseError> {
         // TODO: !!!!
         static JUMP_VELOCITIES: [f32; 26] = [0.0; 26];
 
         use BroadState::*;
-        let mut last_squat_f = consumer.next_frame()?;
-        while consumer.peek()?.broad_state() == JumpSquat {
+        let mut last_squat_f = consumer.next_frame().ok_or(ParseError::EOF)?;
+        while consumer.peek().ok_or(ParseError::EOF)?.broad_state() == JumpSquat {
             last_squat_f = consumer.next_frame().unwrap();
         }
 
         let character = last_squat_f.character;
         let y_vel = last_squat_f.velocity.y;
 
-        let vel_cutoff = JUMP_VELOCITIES.get(character as usize)?;
+        let vel_cutoff = JUMP_VELOCITIES.get(character as usize)
+            .expect("unknown character");
         if y_vel > *vel_cutoff {
-            Some(JumpType::Full)
+            Ok(JumpType::Full)
         } else {
-            Some(JumpType::Short)
+            Ok(JumpType::Short)
         }
     }
 }
@@ -431,7 +454,7 @@ impl Action {
 #[derive(Copy, Clone, Debug)]
 struct ActionInitData {
     pub action_start: usize,
-    pub actionable_state: ActionableState,
+    pub start_state: BroadState,
     pub position: Vector,
     pub velocity: Vector,
 }
@@ -451,20 +474,26 @@ impl<'a> ActionBuilder<'a> {
         }
     }
 
-    pub fn start_action(&mut self) -> Option<()> {
-        let start_frame = self.peek_frame()?;
+    pub fn current_frame(&self) -> usize {
+        self.cur_frame
+    }
+
+    pub fn start_action(&mut self) -> Result<(), ParseError> {
+        let start_frame = self.peek_frame().ok_or(ParseError::EOF)?;
         let position = start_frame.position;
         let velocity = start_frame.velocity;
-        let actionable_state = start_frame.state.actionable_state()?;
+
+        // TODO wtf????
+        let start_state = start_frame.state.broad_state();
 
         self.action_init_data = Some(ActionInitData {
             action_start: self.cur_frame,
-            actionable_state,
+            start_state,
             position,
             velocity,
         });
 
-        Some(())
+        Ok(())
     }
 
     pub fn finish_action(&mut self, high_level_action: HighLevelAction) -> Action {
@@ -474,7 +503,7 @@ impl<'a> ActionBuilder<'a> {
             action_taken: high_level_action,
             frame_start: start_data.action_start,
             frame_end: self.cur_frame,
-            actionable_state: start_data.actionable_state,
+            start_state: start_data.start_state,
             initial_position: start_data.position,
             initial_velocity: start_data.velocity,
         }
