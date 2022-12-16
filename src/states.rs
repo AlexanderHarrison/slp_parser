@@ -20,17 +20,6 @@ pub enum BroadState {
     Spotdodge,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-#[repr(u8)]
-pub enum ActionableState {
-    Air,
-    Ground,
-    Dash,
-    Run,
-    Shield,
-    Ledge,
-}
-
 /// Multi-frame actions.
 /// Must be derivable from a sequence of BroadStates.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -194,33 +183,6 @@ impl MeleeState {
             CliffAttackSlow | CliffAttackQuick => Attack,
             CliffEscapeSlow | CliffEscapeQuick => Roll,
             CliffJumpSlow1 | CliffJumpSlow2 | CliffJumpQuick1 | CliffJumpQuick2 => Jump, 
-            _ => return None,
-        })
-    }
-
-    pub fn actionable_state(self) -> Option<ActionableState> {
-        use BroadState::*;
-
-        Some(match self.broad_state() {
-            Air     => ActionableState::Air,
-            Ground  => ActionableState::Ground,
-            Walk    => ActionableState::Ground,
-            DashRun => match self {
-                MeleeState::TurnRun   => ActionableState::Run,
-                MeleeState::Dash      => ActionableState::Dash,
-                MeleeState::Run       => ActionableState::Run,            
-                MeleeState::RunDirect => ActionableState::Run,           
-                MeleeState::RunBrake  => ActionableState::Run,           
-                _ => unreachable!(),
-            },
-            Shield  => ActionableState::Shield,
-            Ledge   => match self {
-                MeleeState::CliffCatch => return None,
-                MeleeState::CliffWait  => ActionableState::Ledge,
-                _ => unreachable!(),
-            },
-            AirJump => ActionableState::Air,
-            Crouch  => ActionableState::Ground,
             _ => return None,
         })
     }
@@ -1192,20 +1154,6 @@ impl fmt::Display for GroundAttack {
             Dsmash      => write!(f, "Dsmash"),
             Fsmash      => write!(f, "Fsmash"),
             DashAttack  => write!(f, "Dash attack"),
-        }
-    }                                   
-}                                       
-
-impl fmt::Display for ActionableState {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use ActionableState::*;
-        match self {
-            Air    => write!(f, "Airborne"),
-            Ground => write!(f, "Grounded"),
-            Dash   => write!(f, "Dashing"),
-            Run    => write!(f, "Running"),
-            Shield => write!(f, "Shielding"),
-            Ledge  => write!(f, "On ledge"),
         }
     }                                   
 }                                       
