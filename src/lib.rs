@@ -1,8 +1,9 @@
 pub mod parser;
-mod file_parser;
+pub mod file_parser;
 
 pub mod states;
 use states::*;
+
 
 #[derive(Clone, Debug)]
 pub struct Action {
@@ -14,7 +15,7 @@ pub struct Action {
     pub initial_velocity: Vector,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Port {
     Low = 0,
     High = 1,
@@ -23,11 +24,11 @@ pub enum Port {
 #[derive(Copy, Clone, Debug)]
 pub struct Frame {
     pub character: Character,
-    pub port_idx:  u8, // port - 1
+    pub port_idx:  u8, // zero indexed
     pub direction: Direction,
     pub velocity:  Vector,
     pub position:  Vector,
-    pub state:     MeleeState,
+    pub state:     ActionState,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -54,6 +55,16 @@ pub struct InteractionRef<'a> {
 pub struct Interaction {
     pub opponent_initiation: Action,
     pub player_response: Action,
+}
+
+pub fn read_game(path: &std::path::Path) -> Option<Game> {
+    use std::io::Read;
+
+    let mut slippi_file = std::fs::File::open(path).expect("error opening slippi file");
+    let mut buf = Vec::new();
+    slippi_file.read_to_end(&mut buf).unwrap();
+
+    file_parser::parse_file(&mut file_parser::Stream::new(&buf))
 }
 
 pub fn parse_game(game: &std::path::Path, port: Port) -> Option<Vec<Action>> {
@@ -123,13 +134,13 @@ impl fmt::Display for Action {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Vector {
     pub x: f32,
     pub y: f32,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Direction {
     Left,
     Right
