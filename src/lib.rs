@@ -23,12 +23,13 @@ pub enum Port {
 
 #[derive(Copy, Clone, Debug)]
 pub struct Frame {
-    pub character: Character,
-    pub port_idx:  u8, // zero indexed
+    pub character: Character, // TODO get colour information as well
+    pub port_idx: u8, // zero indexed
     pub direction: Direction,
-    pub velocity:  Vector,
-    pub position:  Vector,
-    pub state:     ActionState,
+    pub velocity: Vector,
+    pub position: Vector,
+    pub state: ActionState,
+    pub anim_frame: f32,
 }
 
 #[derive(Copy, Clone, Debug)]

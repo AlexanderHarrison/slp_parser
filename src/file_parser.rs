@@ -88,6 +88,9 @@ fn parse_game_start(stream: &mut Stream, info: &StreamInfo) -> Option<GameInfo> 
     let substream = info.create_event_stream(GAME_START, stream)?;
     let bytes = substream.as_slice();
 
+    // requires version >= 0.2.0
+    assert!(bytes[0] > 0 || bytes[1] >= 2);
+
     let stage_start = 0x4 + 0xE;
     let stage = u16::from_be_bytes(bytes[stage_start..(stage_start+2)].try_into().unwrap());
     let stage = Stage::from_u16(stage)?;
@@ -127,6 +130,7 @@ fn parse_frame_info(stream: &mut Stream, info: &StreamInfo) -> Option<Frame> {
     };
     let state_u16 = u16::from_be_bytes(bytes[0x7..0x9].try_into().unwrap());
     let state = ActionState::from_u16(state_u16, character)?;
+    let anim_frame = f32::from_be_bytes(bytes[0x21..0x25].try_into().unwrap());
 
     Some(Frame {
         port_idx,
@@ -135,6 +139,7 @@ fn parse_frame_info(stream: &mut Stream, info: &StreamInfo) -> Option<Frame> {
         position,
         velocity,
         state,
+        anim_frame,
     })
 }
 
