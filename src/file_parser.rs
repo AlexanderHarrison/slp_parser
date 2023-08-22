@@ -121,8 +121,12 @@ fn parse_frame_info(stream: &mut Stream, info: &StreamInfo) -> Option<Frame> {
     let direction_f = f32::from_be_bytes(bytes[0x11..0x15].try_into().unwrap());
     let direction = if direction_f == 1.0 { Direction::Right } else { Direction::Left };
     let velocity = Vector {
-        x: f32::from_be_bytes(bytes.get(0x34..(0x34 + 4))?.try_into().unwrap()),
-        y: f32::from_be_bytes(bytes.get(0x38..(0x38 + 4))?.try_into().unwrap()),
+        x: f32::from_be_bytes(bytes.get(0x34..0x38)?.try_into().unwrap()),
+        y: f32::from_be_bytes(bytes.get(0x38..0x3c)?.try_into().unwrap()),
+    };
+    let hit_velocity = Vector {
+        x: f32::from_be_bytes(bytes.get(0x3c..0x40)?.try_into().unwrap()),
+        y: f32::from_be_bytes(bytes.get(0x40..0x44)?.try_into().unwrap()),
     };
     let position = Vector {
         x: f32::from_be_bytes(bytes.get(0x9..(0x9 + 4))?.try_into().unwrap()),
@@ -138,6 +142,7 @@ fn parse_frame_info(stream: &mut Stream, info: &StreamInfo) -> Option<Frame> {
         direction,
         position,
         velocity,
+        hit_velocity,
         state,
         anim_frame,
     })

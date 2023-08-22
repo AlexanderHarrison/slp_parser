@@ -27,6 +27,7 @@ pub struct Frame {
     pub port_idx: u8, // zero indexed
     pub direction: Direction,
     pub velocity: Vector,
+    pub hit_velocity: Vector,
     pub position: Vector,
     pub state: ActionState,
     pub anim_frame: f32,
