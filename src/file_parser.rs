@@ -65,7 +65,7 @@ pub fn parse_file(stream: &mut Stream) -> Option<Game> {
     Some(Game {
         high_port_frames, 
         low_port_frames,
-        game: game_info,
+        info: game_info,
     })
 }
 
@@ -83,12 +83,13 @@ fn skip_raw_header(stream: &mut Stream) -> Option<()> {
 }
 
 fn parse_game_start(stream: &mut Stream, info: &StreamInfo) -> Option<GameInfo> {
+    // note: takes a byte here
     if stream.take_u8() != Some(GAME_START) { return None };
     let substream = info.create_event_stream(GAME_START, stream)?;
     let bytes = substream.as_slice();
 
     // requires version >= 0.2.0
-    assert!(bytes[0] > 0 || bytes[1] >= 2);
+    assert!(bytes[1] > 0 || bytes[2] >= 2);
 
     let stage_start = 0x4 + 0xE;
     let stage = u16::from_be_bytes(bytes[stage_start..(stage_start+2)].try_into().unwrap());
@@ -96,17 +97,34 @@ fn parse_game_start(stream: &mut Stream, info: &StreamInfo) -> Option<GameInfo> 
 
     let mut port_types = [0u8; 4];
     for i in 0..4 {
-        let offset = 0x65 + 0x24 * i;
-        port_types[i] = bytes[offset];
+        port_types[i] = bytes[0x04 + 0x61 + 0x24 * i];
     }
 
     let mut port_iter = port_types.iter().enumerate().filter_map(|(i,p)| if *p != 3 { Some(i) } else { None });
     let low_port_idx = port_iter.next()? as _;
     let high_port_idx = port_iter.next()? as _;
-    if port_iter.next() != None { return None }
+    if port_iter.next().is_some() { return None }
+
+    let low_char_idx  = bytes[0x04 + 0x60 + 0x24 * low_port_idx as usize];
+    let low_colour_idx  = bytes[0x04 + 0x63 + 0x24 * low_port_idx as usize];
+    let high_char_idx = bytes[0x04 + 0x60 + 0x24 * high_port_idx as usize];
+    let high_colour_idx = bytes[0x04 + 0x63 + 0x24 * high_port_idx as usize];
+    let low_char  = Character::from_u8_external(low_char_idx)?;
+    let high_char = Character::from_u8_external(high_char_idx)?;
+    println!("{:?}", low_char);
+    println!("{:?}", high_char);
+    let low_starting_character  = CharacterColour::from_character_and_colour(low_char, low_colour_idx)?;
+    let high_starting_character = CharacterColour::from_character_and_colour(high_char, high_colour_idx)?;
+
+    println!("{:?}", low_starting_character);
+    println!("{:?}", high_starting_character);
 
     Some(GameInfo {
-        stage, low_port_idx, high_port_idx,
+        stage, 
+        low_port_idx, 
+        low_starting_character,
+        high_port_idx,
+        high_starting_character,
     })
 }
 
@@ -115,7 +133,7 @@ fn parse_frame_info(stream: &mut Stream, info: &StreamInfo) -> Option<Frame> {
     let bytes = substream.as_slice();
 
     let port_idx = bytes[0x4];
-    let character = Character::from_u8(bytes[0x6])?;
+    let character = Character::from_u8_internal(bytes[0x6])?;
 
     let direction_f = f32::from_be_bytes(bytes[0x11..0x15].try_into().unwrap());
     let direction = if direction_f == 1.0 { Direction::Right } else { Direction::Left };

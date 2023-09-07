@@ -7,6 +7,8 @@ pub use file_parser::*;
 mod states;
 pub use states::*;
 
+mod game_enums;
+pub use game_enums::*;
 
 #[derive(Clone, Debug)]
 pub struct Action {
@@ -26,7 +28,7 @@ pub enum Port {
 
 #[derive(Copy, Clone, Debug)]
 pub struct Frame {
-    pub character: Character, // TODO get colour information as well
+    pub character: Character,
     pub port_idx: u8, // zero indexed
     pub direction: Direction,
     pub velocity: Vector,
@@ -40,14 +42,16 @@ pub struct Frame {
 pub struct GameInfo {
     pub stage: Stage,
     pub low_port_idx: u8,
+    pub low_starting_character: CharacterColour,
     pub high_port_idx: u8,
+    pub high_starting_character: CharacterColour,
 }
 
 #[derive(Debug)]
 pub struct Game {
     pub low_port_frames: Vec<Frame>,
     pub high_port_frames: Vec<Frame>,
-    pub game: GameInfo,
+    pub info: GameInfo,
 } 
 
 #[derive(Clone, Debug)]

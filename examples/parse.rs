@@ -1,4 +1,4 @@
-use slippi_situation_parser::{parse_game, Port};
+use slp_parser::{parse_game, Port};
 
 fn main() {
     let path = std::env::args_os().nth(1).expect("no path given");
