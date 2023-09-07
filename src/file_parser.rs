@@ -1,4 +1,3 @@
-pub use utils::*;
 use crate::*;
 
 const EVENT_PAYLOADS:       u8 = 0x35;
@@ -164,4 +163,88 @@ fn parse_event_payloads(stream: &mut Stream) -> Option<StreamInfo> {
     Some(StreamInfo {
         event_payload_sizes
     })
+}
+
+pub type SubStream<'a> = Stream<'a>;
+pub struct Stream<'a> {
+    n_read: usize,
+    bytes: &'a [u8],
+}
+
+impl<'a> Stream<'a> {
+    pub fn new(bytes: &'a [u8]) -> Self {
+        Stream {
+            n_read: 0,
+            bytes,
+        }
+    }
+
+    pub fn bytes_read(&self) -> usize {
+        self.n_read
+    }
+
+    pub fn as_slice(self) -> &'a [u8] {
+        self.bytes
+    }
+
+    pub fn take_u8(&mut self) -> Option<u8> {
+        match self.bytes {
+            [b, rest @ ..] => {
+                self.bytes = rest;
+                self.n_read += 1;
+                Some(*b)
+            }
+            _ => None
+        }
+    }
+
+    pub fn take_bool(&mut self) -> Option<bool> {
+        let byte = self.take_u8()?;
+        if byte > 1 { return None }
+        Some(unsafe { std::mem::transmute(byte) })
+    }
+
+    pub fn take_u16(&mut self) -> Option<u16> {
+        self.take_const_n::<2>()
+            .map(|data| u16::from_be_bytes(*data))
+    }
+
+    pub fn take_u32(&mut self) -> Option<u32> {
+        self.take_const_n::<4>()
+            .map(|data| u32::from_be_bytes(*data))
+    }
+
+    pub fn take_float(&mut self) -> Option<f32> {
+        self.take_const_n::<4>()
+            .map(|data| f32::from_be_bytes(*data))
+    }
+
+    pub fn take_n(&mut self, n: usize) -> Option<&'a [u8]> {
+        if n > self.bytes.len() { return None }
+
+        let (ret, new_bytes) = self.bytes.split_at(n);
+        self.bytes = new_bytes;
+        self.n_read += n;
+        Some(ret)
+    }
+
+    /// return size optimization, may not be needed but simple to add
+    pub fn take_const_n<const N: usize>(&mut self) -> Option<&'a [u8; N]> {
+        if N > self.bytes.len() { return None }
+        
+        let ret = unsafe { &*(self.bytes.as_ptr() as *const [u8; N]) };
+        self.bytes = &self.bytes[N..];
+        self.n_read += N;
+        Some(ret)
+    }
+
+    pub fn sub_stream(&mut self, size: usize) -> SubStream<'a> {
+        let (sub, new_self) = self.bytes.split_at(size);
+        self.bytes = new_self;
+        self.n_read += sub.len();
+        Stream {
+            n_read: 0,
+            bytes: sub
+        }
+    }
 }

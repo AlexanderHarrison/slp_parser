@@ -97,6 +97,8 @@ impl Action {
 
         match state {
             Fox(state) => state.parse_special(consumer),
+            Falco(state) => state.parse_special(consumer),
+            Marth(state) => state.parse_special(consumer),
         }
     }
 
@@ -402,6 +404,8 @@ impl Action {
 
         match state {
             Fox(state) => state.parse_jumping_special(consumer, jump_type),
+            Falco(state) => state.parse_jumping_special(consumer, jump_type),
+            Marth(state) => state.parse_jumping_special(consumer, jump_type),
         }
     }
 

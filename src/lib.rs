@@ -1,8 +1,11 @@
-pub mod parser;
-pub mod file_parser;
+mod parser;
+pub use parser::*;
 
-pub mod states;
-use states::*;
+mod file_parser;
+pub use file_parser::*;
+
+mod states;
+pub use states::*;
 
 
 #[derive(Clone, Debug)]
