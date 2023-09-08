@@ -36,6 +36,7 @@ pub struct Frame {
     pub position: Vector,
     pub state: ActionState,
     pub anim_frame: f32,
+    //pub item_range: (u32, u32)
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -49,8 +50,9 @@ pub struct GameInfo {
 
 #[derive(Debug)]
 pub struct Game {
-    pub low_port_frames: Vec<Frame>,
-    pub high_port_frames: Vec<Frame>,
+    pub low_port_frames: Box<[Frame]>,
+    pub high_port_frames: Box<[Frame]>,
+    //pub items: Box<[Item]>,
     pub info: GameInfo,
 } 
 
@@ -76,7 +78,7 @@ pub fn read_game(path: &std::path::Path) -> Option<Game> {
     file_parser::parse_file(&mut file_parser::Stream::new(&buf))
 }
 
-pub fn parse_game(game: &std::path::Path, port: Port) -> Option<Vec<Action>> {
+pub fn parse_game(game: &std::path::Path, port: Port) -> Option<Box<[Action]>> {
     use std::io::Read;
 
     let mut slippi_file = std::fs::File::open(game).expect("error opening slippi file");
@@ -86,7 +88,7 @@ pub fn parse_game(game: &std::path::Path, port: Port) -> Option<Vec<Action>> {
     parse_buf(&buf, port)
 }
 
-pub fn parse_buf(buf: &[u8], port: Port) -> Option<Vec<Action>> {
+pub fn parse_buf(buf: &[u8], port: Port) -> Option<Box<[Action]>> {
     let mut stream = file_parser::Stream::new(buf);
     let game = file_parser::parse_file(&mut stream)?;
 
@@ -95,7 +97,7 @@ pub fn parse_buf(buf: &[u8], port: Port) -> Option<Vec<Action>> {
         Port::Low => &game.low_port_frames,
     };
 
-    Some(parser::parse(frames))
+    Some(parser::parse(frames).into_boxed_slice())
 }
 
 macro_rules! unwrap_or {
@@ -108,13 +110,13 @@ macro_rules! unwrap_or {
 }
 
 
-pub fn generate_interactions<'a>(mut player_actions: &'a [Action], mut opponent_actions: &'a [Action]) -> Vec<InteractionRef<'a>> {
+pub fn generate_interactions<'a>(mut player_actions: &'a [Action], mut opponent_actions: &'a [Action]) -> Box<[InteractionRef<'a>]> {
     let mut interactions = Vec::new();
 
     let mut initiation;
     let mut response;
-    (initiation, opponent_actions) = unwrap_or!(opponent_actions.split_first(), return interactions);
-    (response, player_actions) = unwrap_or!(player_actions.split_first(), return interactions);
+    (initiation, opponent_actions) = unwrap_or!(opponent_actions.split_first(), return interactions.into_boxed_slice());
+    (response, player_actions) = unwrap_or!(player_actions.split_first(), return interactions.into_boxed_slice());
 
     'outer: loop {
         while response.frame_start <= initiation.frame_start {
@@ -131,7 +133,7 @@ pub fn generate_interactions<'a>(mut player_actions: &'a [Action], mut opponent_
         }
     }
 
-    interactions
+    interactions.into_boxed_slice()
 }
 
 use std::fmt;

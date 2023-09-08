@@ -11,7 +11,7 @@ fn main() {
     let mut buf = Vec::new();
     slippi_file.read_to_end(&mut buf).unwrap();
     let parsed = parse_game(path, Port::High);
-    for r in parsed.unwrap() { 
+    for r in parsed.unwrap().into_iter() { 
         println!("{} -> {}: {}",r.frame_start, r.frame_end, r.action_taken);
     }
 }

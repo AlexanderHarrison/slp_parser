@@ -63,8 +63,8 @@ pub fn parse_file(stream: &mut Stream) -> Option<Game> {
     }
 
     Some(Game {
-        high_port_frames, 
-        low_port_frames,
+        high_port_frames: high_port_frames.into_boxed_slice(), 
+        low_port_frames: low_port_frames.into_boxed_slice(),
         info: game_info,
     })
 }
