@@ -36,7 +36,18 @@ pub struct Frame {
     pub position: Vector,
     pub state: ActionState,
     pub anim_frame: f32,
-    //pub item_range: (u32, u32)
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct Item {
+    pub type_id: u16,
+    pub state: u8,
+    pub direction: Direction,
+    pub position: Vector,
+    pub missile_type: u8,
+    pub turnip_type: u8,
+    pub charge_shot_launched: bool,
+    pub charge_shot_power: u8,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -52,7 +63,11 @@ pub struct GameInfo {
 pub struct Game {
     pub low_port_frames: Box<[Frame]>,
     pub high_port_frames: Box<[Frame]>,
-    //pub items: Box<[Item]>,
+
+    /// one for each frame, and one more.
+    /// You can safely do `item_ranges[frame]..item_ranges[frame+1]`
+    pub item_idx: Box<[u16]>,
+    pub items: Box<[Item]>,
     pub info: GameInfo,
 } 
 

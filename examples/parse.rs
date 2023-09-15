@@ -10,8 +10,12 @@ fn main() {
     let mut slippi_file = std::fs::File::open(path).expect("error opening slippi file");
     let mut buf = Vec::new();
     slippi_file.read_to_end(&mut buf).unwrap();
-    let parsed = parse_game(path, Port::High);
-    for r in parsed.unwrap().into_iter() { 
-        println!("{} -> {}: {}",r.frame_start, r.frame_end, r.action_taken);
+    let game = slp_parser::read_game(path).unwrap();
+    for i in game.item_idx.iter() {
+        println!("{:?}", i);
     }
+    //let parsed = parse_game(path, Port::High);
+    //for r in parsed.unwrap().into_iter() { 
+    //    println!("{} -> {}: {}",r.frame_start, r.frame_end, r.action_taken);
+    //}
 }

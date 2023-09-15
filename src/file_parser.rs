@@ -6,7 +6,7 @@ const GAME_START:           u8 = 0x36;
 const POST_FRAME_UPDATE:    u8 = 0x38;
 const GAME_END:             u8 = 0x39;
 //const FRAME_START:          u8 = 0x3A;
-//const ITEM_UPDATE:          u8 = 0x3B;
+const ITEM_UPDATE:          u8 = 0x3B;
 //const FRAME_BOOKEND:        u8 = 0x3C;
 //const GECKO_LIST:           u8 = 0x3D;
 
@@ -46,16 +46,25 @@ pub fn parse_file(stream: &mut Stream) -> Option<Game> {
     port_info[game_info.low_port_idx as usize] = Some(Port::Low);
     port_info[game_info.high_port_idx as usize] = Some(Port::High);
 
+    let mut items = Vec::new();
+    let mut item_idx = vec![0];
+
     loop {
         let next_command_byte = stream.take_u8()?;
         match next_command_byte {
+            ITEM_UPDATE => {
+                items.push(parse_item_update(stream, &stream_info)?);
+            }
             POST_FRAME_UPDATE => {
-                let frame = parse_frame_info(stream, &stream_info)?;
+                let mut frame = parse_frame_info(stream, &stream_info)?;
+
                 let port = port_info[frame.port_idx as usize].unwrap();
                 match port {
                     Port::Low => low_port_frames.push(frame),
                     Port::High => high_port_frames.push(frame),
                 }
+
+                item_idx.push(items.len() as _);
             }
             GAME_END => break,
             _ => stream_info.skip_event(next_command_byte, stream)?,
@@ -65,6 +74,8 @@ pub fn parse_file(stream: &mut Stream) -> Option<Game> {
     Some(Game {
         high_port_frames: high_port_frames.into_boxed_slice(), 
         low_port_frames: low_port_frames.into_boxed_slice(),
+        item_idx: item_idx.into_boxed_slice(),
+        items: items.into_boxed_slice(),
         info: game_info,
     })
 }
@@ -125,6 +136,36 @@ fn parse_game_start(stream: &mut Stream, info: &StreamInfo) -> Option<GameInfo> 
         low_starting_character,
         high_port_idx,
         high_starting_character,
+    })
+}
+
+fn parse_item_update(stream: &mut Stream, info: &StreamInfo) -> Option<Item> {
+    // note: takes a byte here
+    let substream = info.create_event_stream(ITEM_UPDATE, stream)?;
+    let bytes = substream.as_slice();
+
+    let type_id = u16::from_be_bytes(bytes.get(0x04..0x06)?.try_into().unwrap());
+    let state = bytes[0x06];
+    let direction_f = f32::from_be_bytes(bytes[0x07..0x0B].try_into().unwrap());
+    let direction = if direction_f == 1.0 { Direction::Right } else { Direction::Left };
+    let position = Vector {
+        x: f32::from_be_bytes(bytes.get(0x13..0x17)?.try_into().unwrap()),
+        y: f32::from_be_bytes(bytes.get(0x17..0x1B)?.try_into().unwrap()),
+    };
+    let missile_type = bytes[0x25];
+    let turnip_type = bytes[0x26];
+    let charge_shot_launched = bytes[0x27] == 1;
+    let charge_shot_power = bytes[0x28];
+
+    Some(Item {
+        type_id,
+        state,
+        direction,
+        position,
+        missile_type,
+        turnip_type,
+        charge_shot_launched,
+        charge_shot_power,
     })
 }
 
