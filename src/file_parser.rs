@@ -7,7 +7,7 @@ const POST_FRAME_UPDATE:    u8 = 0x38;
 const GAME_END:             u8 = 0x39;
 //const FRAME_START:          u8 = 0x3A;
 const ITEM_UPDATE:          u8 = 0x3B;
-//const FRAME_BOOKEND:        u8 = 0x3C;
+const FRAME_BOOKEND:        u8 = 0x3C;
 //const GECKO_LIST:           u8 = 0x3D;
 
 //#[derive(Copy, Clone, Debug)]
@@ -56,15 +56,29 @@ pub fn parse_file(stream: &mut Stream) -> Option<Game> {
                 items.push(parse_item_update(stream, &stream_info)?);
             }
             POST_FRAME_UPDATE => {
-                let mut frame = parse_frame_info(stream, &stream_info)?;
+                let frame = parse_frame_info(stream, &stream_info)?;
 
                 let port = port_info[frame.port_idx as usize].unwrap();
                 match port {
                     Port::Low => low_port_frames.push(frame),
                     Port::High => high_port_frames.push(frame),
                 }
+            }
+            FRAME_BOOKEND => {
+                let mut stream = stream_info.create_event_stream(FRAME_BOOKEND, stream)?;
+                let frame_num = (stream.take_i32()? + 123) as usize; // slippi starts frames at -123
 
-                item_idx.push(items.len() as _);
+                // rollback :(
+                if frame_num + 1 as usize != low_port_frames.len() {
+                    low_port_frames[frame_num] = low_port_frames[low_port_frames.len()-1];
+                    high_port_frames[frame_num] = high_port_frames[low_port_frames.len()-1];
+                    item_idx[frame_num] = items.len() as _;
+                    low_port_frames.truncate(frame_num+1);
+                    high_port_frames.truncate(frame_num+1);
+                    item_idx.truncate(frame_num+1);
+                } else {
+                    item_idx.push(items.len() as _);
+                }
             }
             GAME_END => break,
             _ => stream_info.skip_event(next_command_byte, stream)?,
@@ -122,13 +136,8 @@ fn parse_game_start(stream: &mut Stream, info: &StreamInfo) -> Option<GameInfo> 
     let high_colour_idx = bytes[0x04 + 0x63 + 0x24 * high_port_idx as usize];
     let low_char  = Character::from_u8_external(low_char_idx)?;
     let high_char = Character::from_u8_external(high_char_idx)?;
-    println!("{:?}", low_char);
-    println!("{:?}", high_char);
     let low_starting_character  = CharacterColour::from_character_and_colour(low_char, low_colour_idx)?;
     let high_starting_character = CharacterColour::from_character_and_colour(high_char, high_colour_idx)?;
-
-    println!("{:?}", low_starting_character);
-    println!("{:?}", high_starting_character);
 
     Some(GameInfo {
         stage, 
@@ -271,6 +280,11 @@ impl<'a> Stream<'a> {
     pub fn take_u32(&mut self) -> Option<u32> {
         self.take_const_n::<4>()
             .map(|data| u32::from_be_bytes(*data))
+    }
+
+    pub fn take_i32(&mut self) -> Option<i32> {
+        self.take_const_n::<4>()
+            .map(|data| i32::from_be_bytes(*data))
     }
 
     pub fn take_float(&mut self) -> Option<f32> {
