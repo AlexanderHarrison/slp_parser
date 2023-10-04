@@ -23,7 +23,6 @@ pub enum Stage {
     PokeFloats           = 023,
     BigBlue              = 024,
     IcicleMountain       = 025,
-    Icetop               = 026,
     FlatZone             = 027,
     DreamLandN64         = 028,
     YoshisIslandN64      = 029,
@@ -58,7 +57,6 @@ impl Stage {
             023 => Stage::PokeFloats          ,
             024 => Stage::BigBlue             ,
             025 => Stage::IcicleMountain      ,
-            026 => Stage::Icetop              ,
             027 => Stage::FlatZone            ,
             028 => Stage::DreamLandN64        ,
             029 => Stage::YoshisIslandN64     ,
@@ -302,6 +300,42 @@ impl std::fmt::Display for CharacterColour {
     }
 }
 
+impl std::fmt::Display for Stage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Stage::FountainOfDreams     => write!(f, "Fountain of Dreams"),
+            Stage::PokemonStadium       => write!(f, "Pokemon Stadium"),
+            Stage::PrincessPeachsCastle => write!(f, "Princess Peach's Castle"),
+            Stage::KongoJungle          => write!(f, "Kongo Jungle"),
+            Stage::Brinstar             => write!(f, "Brinstar"),
+            Stage::Corneria             => write!(f, "Corneria"),
+            Stage::YoshisStory          => write!(f, "Yoshi's Story"),
+            Stage::Onett                => write!(f, "Onett"),
+            Stage::MuteCity             => write!(f, "Mute City"),
+            Stage::RainbowCruise        => write!(f, "Rainbow Cruise"),
+            Stage::JungleJapes          => write!(f, "Jungle Japes"),
+            Stage::GreatBay             => write!(f, "Great Bay"),
+            Stage::HyruleTemple         => write!(f, "Hyrule Temple"),
+            Stage::BrinstarDepths       => write!(f, "Brinstar Depths"),
+            Stage::YoshisIsland         => write!(f, "Yoshi's Island"),
+            Stage::GreenGreens          => write!(f, "Green Greens"),
+            Stage::Fourside             => write!(f, "Fourside"),
+            Stage::MushroomKingdomI     => write!(f, "Mushroom Kingdom I"),
+            Stage::MushroomKingdomII    => write!(f, "Mushroom Kingdom II"),
+            Stage::Venom                => write!(f, "Venom"),
+            Stage::PokeFloats           => write!(f, "Poke Floats"),
+            Stage::BigBlue              => write!(f, "Big Blue"),
+            Stage::IcicleMountain       => write!(f, "Icicle Mountain"),
+            Stage::FlatZone             => write!(f, "Flat Zone"),
+            Stage::DreamLandN64         => write!(f, "Dream Land 64"),
+            Stage::YoshisIslandN64      => write!(f, "Yoshi's Island 64"),
+            Stage::KongoJungleN64       => write!(f, "Kongo Jungle 64"),
+            Stage::Battlefield          => write!(f, "Battlefield"),
+            Stage::FinalDestination     => write!(f, "Final Destination"),
+        }
+    }
+}
+
 use character_colours::*;
 pub mod character_colours {
     macro_rules! colour {
@@ -330,29 +364,29 @@ pub mod character_colours {
         }
     }
 
-    colour!(pub enum CaptainFalconColour  { Neutral = 0, Black  = 1, Red      = 2, White     = 3, Green  = 4, Blue  = 5 });
+    colour!(pub enum CaptainFalconColour  { Neutral = 0, Grey   = 1, Red      = 2, White     = 3, Green  = 4, Blue  = 5 });
     colour!(pub enum DonkeyKongColour     { Neutral = 0, Black  = 1, Red      = 2, Blue      = 3, Green  = 4            });
-    colour!(pub enum FoxColour            { Neutral = 0, Red    = 1, Blue     = 2, Green     = 3                        });
+    colour!(pub enum FoxColour            { Neutral = 0, Orange = 1, Lavender = 2, Green     = 3                        });
     colour!(pub enum MrGameAndWatchColour { Neutral = 0, Red    = 1, Blue     = 2, Green     = 3                        });
     colour!(pub enum KirbyColour          { Neutral = 0, Yellow = 1, Blue     = 2, Red       = 3, Green  = 4, White = 5 });
     colour!(pub enum BowserColour         { Neutral = 0, Red    = 1, Blue     = 2, Black     = 3                        });
     colour!(pub enum LinkColour           { Neutral = 0, Red    = 1, Blue     = 2, Black     = 3, White  = 4            });
-    colour!(pub enum LuigiColour          { Neutral = 0, White  = 1, Blue     = 2, Red       = 3                        });
+    colour!(pub enum LuigiColour          { Neutral = 0, White  = 1, Aqua     = 2, Pink      = 3                        });
     colour!(pub enum MarioColour          { Neutral = 0, Yellow = 1, Black    = 2, Blue      = 3, Green  = 4            });
     colour!(pub enum MarthColour          { Neutral = 0, Red    = 1, Green    = 2, Black     = 3, White  = 4            });
     colour!(pub enum MewtwoColour         { Neutral = 0, Red    = 1, Blue     = 2, Green     = 3                        });
     colour!(pub enum NessColour           { Neutral = 0, Yellow = 1, Blue     = 2, Green     = 3                        });
-    colour!(pub enum PeachColour          { Neutral = 0, Daisy  = 1, White    = 2, Blue      = 3, Green  = 4            });
-    colour!(pub enum PikachuColour        { Neutral = 0, Red    = 1, PartyHat = 2, CowboyHat = 3                        });
+    colour!(pub enum PeachColour          { Neutral = 0, Yellow = 1, White    = 2, Blue      = 3, Green  = 4            });
+    colour!(pub enum PikachuColour        { Neutral = 0, Red    = 1, Blue     = 2, Green     = 3                        });
     colour!(pub enum IceClimbersColour    { Neutral = 0, Green  = 1, Orange   = 2, Red       = 3                        });
-    colour!(pub enum JigglypuffColour     { Neutral = 0, Red    = 1, Blue     = 2, Headband  = 3, Crown  = 4            });
-    colour!(pub enum SamusColour          { Neutral = 0, Pink   = 1, Black    = 2, Green     = 3, Purple = 4            });
-    colour!(pub enum YoshiColour          { Neutral = 0, Red    = 1, Blue     = 2, Yellow    = 3, Pink   = 4, Cyan  = 5 });
+    colour!(pub enum JigglypuffColour     { Neutral = 0, Red    = 1, Blue     = 2, Green     = 3, Yellow = 4            });
+    colour!(pub enum SamusColour          { Neutral = 0, Pink   = 1, Black    = 2, Green     = 3, Lavender = 4          });
+    colour!(pub enum YoshiColour          { Neutral = 0, Red    = 1, Blue     = 2, Yellow    = 3, Pink   = 4, Aqua  = 5 });
     colour!(pub enum ZeldaColour          { Neutral = 0, Red    = 1, Blue     = 2, Green     = 3, White  = 4            });
     colour!(pub enum FalcoColour          { Neutral = 0, Red    = 1, Blue     = 2, Green     = 3                        });
     colour!(pub enum YoungLinkColour      { Neutral = 0, Red    = 1, Blue     = 2, White     = 3, Black  = 4            });
     colour!(pub enum DrMarioColour        { Neutral = 0, Red    = 1, Blue     = 2, Green     = 3, Black  = 4            });
     colour!(pub enum RoyColour            { Neutral = 0, Red    = 1, Blue     = 2, Green     = 3, Yellow = 4            });
     colour!(pub enum PichuColour          { Neutral = 0, Red    = 1, Blue     = 2, Green     = 3                        });
-    colour!(pub enum GanondorfColour      { Neutral = 0, Red    = 1, Blue     = 2, Green     = 3, Purple = 4            });
+    colour!(pub enum GanondorfColour      { Neutral = 0, Red    = 1, Blue     = 2, Green     = 3, Lavender = 4          });
 }

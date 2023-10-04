@@ -34,6 +34,26 @@ impl StreamInfo {
     }
 }
 
+// don't use stream - usually this is called for many files at a time
+pub fn parse_file_info(reader: &mut impl std::io::Read) -> Option<GameInfo> {
+    let mut buf = [0u8; 1024];
+    
+    let mut read_count = reader.read(&mut buf).ok()?;
+
+    // unlikely
+    while read_count < 1024 {
+        let read = reader.read(&mut buf[read_count..]).ok()?;
+        if read == 0 { break } // file smaller than 1024 somehow
+        read_count += read;
+    }
+
+    let mut stream = Stream::new(&buf[0..read_count]);
+
+    skip_raw_header(&mut stream)?;
+    let stream_info = parse_event_payloads(&mut stream)?;
+    parse_game_start(&mut stream, &stream_info)
+}
+
 pub fn parse_file(stream: &mut Stream) -> Option<Game> {
     skip_raw_header(stream)?;
     let stream_info = parse_event_payloads(stream)?;

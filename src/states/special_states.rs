@@ -3,7 +3,11 @@ use crate::parser::{JumpType, ParseError, ActionBuilder};
 use crate::states::HighLevelAction;
 use std::fmt;
 
-// https://docs.google.com/spreadsheets/d/1Nu3hSc1U6apOhU4JIJaWRC4Lj0S1inN8BFsq3Y8cFjI/preview
+// HOW TO ADD: get char anim map using example
+// go to: https://docs.google.com/spreadsheets/d/1Nu3hSc1U6apOhU4JIJaWRC4Lj0S1inN8BFsq3Y8cFjI
+// copy action state names and indicies
+// fill out action state and hla enum names
+// fill out anim map in arwing
 
 macro_rules! parse_fn {
     ($char:ident, $sbs:ident, $shla:ident, $bsnm:ident, $consumer:ident, ParseAll) => {{
@@ -54,14 +58,9 @@ macro_rules! special_states {
 
         impl $sas {
             pub fn from_u16(n: u16) -> Option<Self> {
-                const NUMS: &[u16] = &[$($n),*];
-                const TOP: u16 = NUMS[NUMS.len() - 1];
-                const BOT: u16 = NUMS[0];
-
-                if BOT <= n && n <= TOP {
-                    Some(unsafe { std::mem::transmute(n) })
-                } else {
-                    None
+                match n {
+                    $($n => Some($sas::$nm),)*
+                    _ => None
                 }
             }
 
@@ -78,11 +77,8 @@ macro_rules! special_states {
             }
 
             pub fn broad_state(self) -> $sbs {
-                use $sas::*;
-                use $sbs::*;
-
                 match self {
-                    $($nm => $bs),*
+                    $($sas::$nm => $sbs::$bs),*
                 }
             }
         }
@@ -244,7 +240,6 @@ special_states! {
         DancingBlade , ParseAll, NoJumpVariants(),
         DolphinSlash , ParseAll, AnyJumpVariant(JumpDolphinSlash),
         Counter      , ParseAll, NoJumpVariants(),
-        Taunt        , ParseAll, NoJumpVariants(),
     },
     {
         ShieldBreakerGroundStartCharge  = 341 => ShieldBreaker, "SpecialNStart"   ,
@@ -279,5 +274,81 @@ special_states! {
         CounterGroundHit                = 370 => Counter      , "SpecialLwHit"    ,
         CounterAir                      = 371 => Counter      , "SpecialAirLw"    ,
         CounterAirHit                   = 372 => Counter      , "SpecialAirLwHit" ,
+    }
+}
+
+special_states! {
+    Peach, PeachSpecialActionState, PeachSpecialBroadState, PeachHighLevelAction
+    {
+        Float, ParseAll, AnyJumpVariant(JumpFloat),
+        FloatNair, ParseAll, NoJumpVariants(),
+        FloatFair, ParseAll, NoJumpVariants(),
+        FloatBair, ParseAll, NoJumpVariants(),
+        FloatUair, ParseAll, NoJumpVariants(),
+        FloatDair, ParseAll, NoJumpVariants(),
+        SideSmash, ParseAll, NoJumpVariants(),
+        Toad, ParseAll, NoJumpVariants(),
+        Bomber, ParseAll, NoJumpVariants(),
+        Parasol, ParseAll, NoJumpVariants(),
+        Turnip, ParseAll, NoJumpVariants(),
+    },
+    {
+        Float                 = 341	=> Float    , "FuwaFuwa"    ,
+        FloatEndForward       = 342	=> Float    , "FuwaFuwa"    ,
+        FloatEndBackward      = 343	=> Float    , "FuwaFuwa"    ,
+        FloatNair             = 344	=> FloatNair, "AttackAirN"  ,
+        FloatFair             = 345	=> FloatFair, "AttackAirF"  ,
+        FloatBair             = 346	=> FloatBair, "AttackAirB"  ,
+        FloatUair             = 347	=> FloatUair, "AttackAirHi" ,
+        FloatDair             = 348	=> FloatDair, "AttackAirLw" ,
+        SideSmashGolfClub     = 349	=> SideSmash, "AttackS4S"   ,
+        SideSmashFryingPan    = 350	=> SideSmash, "AttackS4S"   ,
+        SideSmashTennisRacket = 351	=> SideSmash, "AttackS4S"   ,
+        VegetableGround       = 352	=> Turnip   , "SpecialLw"   ,
+        VegetableAir          = 353	=> Turnip   , "SpecialLw"   ,
+        BomberGroundStartup   = 354	=> Bomber   , "SpecialSStart",
+        BomberGroundEnd       = 355	=> Bomber   , "SpecialSEnd",
+        BomberAirStartup      = 357	=> Bomber   , "SpecialAirSStart",
+        BomberAirEnd          = 358	=> Bomber   , "SpecialAirSEnd",
+        BomberAirHit          = 359	=> Bomber   , "SpecialSJump",
+        BomberAir             = 360	=> Bomber   , "SpecialS",
+        ParasolGroundStart    = 361	=> Parasol  , "SpecialHiStart",
+        ParasolAirStart       = 363	=> Parasol  , "SpecialAirHiStart",
+        ToadGround            = 365	=> Toad     , "SpecialN",
+        ToadGroundAttack      = 366	=> Toad     , "SpecialN",
+        ToadAir               = 367	=> Toad     , "SpecialN",
+        ToadAirAttack         = 368	=> Toad     , "SpecialN",
+        ParasolOpening        = 369	=> Parasol  , "SpecialHiStart",
+        ParasolOpen           = 370	=> Parasol  , "SpecialHiStart",
+    }
+}
+
+special_states! {
+    CaptainFalcon, CaptainFalconSpecialActionState, 
+    CaptainFalconSpecialBroadState, CaptainFalconHighLevelAction
+    {
+        FalconPunch, ParseAll, NoJumpVariants(),
+        RaptorBoost, ParseAll, NoJumpVariants(),
+        FalconDive, ParseAll, NoJumpVariants(),
+        FalconKick, ParseAll, NoJumpVariants(),
+    },
+    {
+        FalconPunchGround               = 347 => FalconPunch, "SpecialN",
+        FalconPunchAir                  = 348 => FalconPunch, "SpecialAirN",
+        RaptorBoostGround               = 349 => RaptorBoost, "SpecialSStart",
+        RaptorBoostGroundHit            = 350 => RaptorBoost, "SpecialS",
+        RaptorBoostAir                  = 351 => RaptorBoost, "SpecialAirSStart",
+        RaptorBoostAirHit               = 352 => RaptorBoost, "SpecialAirS",
+        FalconDiveGround                = 353 => FalconDive , "SpecialHi",
+        FalconDiveAir                   = 354 => FalconDive , "SpecialAirHi",
+        FalconDiveCatch                 = 355 => FalconDive , "SpecialHiCatch",
+        FalconDiveEnding                = 356 => FalconDive , "SpecialHiThrow",
+        FalconKickGround                = 357 => FalconKick , "SpecialLw",
+        FalconKickGroundEndingOnGround  = 358 => FalconKick , "SpecialLwEnd",
+        FalconKickAir                   = 359 => FalconKick , "SpecialAirLw",
+        FalconKickAirEndingOnGround     = 360 => FalconKick , "SpecialAirLwEnd",
+        FalconKickAirEndingInAir        = 361 => FalconKick , "SpecialAirLwEndAir",
+        FalconKickGroundEndingInAir     = 362 => FalconKick , "SpecialLwEnd",
+        FalconKickHitWall               = 363 => FalconKick , "SpecialLwEnd", // idk
     }
 }

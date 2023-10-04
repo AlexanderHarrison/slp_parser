@@ -83,6 +83,31 @@ pub struct Interaction {
     pub player_response: Action,
 }
 
+pub fn read_info_in_dir(path: impl AsRef<std::path::Path>) -> Option<impl Iterator<Item=(Box<std::path::Path>, GameInfo)>> {
+    Some(std::fs::read_dir(path)
+        .ok()?
+        .filter_map(|entry| {
+            if let Ok(entry) = entry {
+                if let Ok(ftype) = entry.file_type() {
+                    if ftype.is_file() {
+                        let path = entry.path();
+                        if path.extension() == Some(std::ffi::OsStr::new("slp")) {
+                            if let Some(info) = read_info(&path) {
+                                return Some((path.into_boxed_path(), info))
+                            }
+                        }
+                    }
+                }
+            }
+            None
+        }))
+}
+
+pub fn read_info(path: &std::path::Path) -> Option<GameInfo> {
+    let mut file = std::fs::File::open(path).ok()?;
+    file_parser::parse_file_info(&mut file)
+}
+
 pub fn read_game(path: &std::path::Path) -> Option<Game> {
     use std::io::Read;
 

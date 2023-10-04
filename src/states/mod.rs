@@ -1010,6 +1010,8 @@ impl SpecialActionState {
             SpecialActionState::Fox(s) => SpecialBroadState::Fox(s.broad_state()),
             SpecialActionState::Falco(s) => SpecialBroadState::Falco(s.broad_state()),
             SpecialActionState::Marth(s) => SpecialBroadState::Marth(s.broad_state()),
+            SpecialActionState::Peach(s) => SpecialBroadState::Peach(s.broad_state()),
+            SpecialActionState::CaptainFalcon(s) => SpecialBroadState::CaptainFalcon(s.broad_state()),
         }
     }
 
@@ -1019,6 +1021,8 @@ impl SpecialActionState {
             SpecialActionState::Fox(f) => f.internal_name(),
             SpecialActionState::Falco(f) => f.internal_name(),
             SpecialActionState::Marth(f) => f.internal_name(),
+            SpecialActionState::Peach(f) => f.internal_name(),
+            SpecialActionState::CaptainFalcon(f) => f.internal_name(),
         }
     }
 
@@ -1027,6 +1031,8 @@ impl SpecialActionState {
             Character::Fox => SpecialActionState::Fox(FoxSpecialActionState::from_u16(n)?),
             Character::Falco => SpecialActionState::Falco(FalcoSpecialActionState::from_u16(n)?),
             Character::Marth => SpecialActionState::Marth(MarthSpecialActionState::from_u16(n)?),
+            Character::Peach => SpecialActionState::Peach(PeachSpecialActionState::from_u16(n)?),
+            Character::CaptainFalcon => SpecialActionState::CaptainFalcon(CaptainFalconSpecialActionState::from_u16(n)?),
             _ => {
                 println!("{n}, {character:?}");
                 todo!()
@@ -1048,6 +1054,8 @@ pub enum SpecialActionState {
     Fox(FoxSpecialActionState),
     Falco(FalcoSpecialActionState),
     Marth(MarthSpecialActionState),
+    Peach(PeachSpecialActionState),
+    CaptainFalcon(CaptainFalconSpecialActionState),
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -1055,6 +1063,8 @@ pub enum SpecialBroadState {
     Fox(FoxSpecialBroadState),
     Falco(FalcoSpecialBroadState),
     Marth(MarthSpecialBroadState),
+    Peach(PeachSpecialBroadState),
+    CaptainFalcon(CaptainFalconSpecialBroadState),
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -1062,6 +1072,8 @@ pub enum SpecialHighLevelAction {
     Fox(FoxHighLevelAction),
     Falco(FalcoHighLevelAction),
     Marth(MarthHighLevelAction),
+    Peach(PeachHighLevelAction),
+    CaptainFalcon(CaptainFalconHighLevelAction),
 }
 
 #[derive(Copy, Clone, Debug, PartialOrd, Ord, PartialEq, Eq, Hash)]
@@ -1639,6 +1651,8 @@ impl fmt::Display for SpecialHighLevelAction {
             Fox(ch) => write!(f, "{}", ch),
             Falco(ch) => write!(f, "{}", ch),
             Marth(ch) => write!(f, "{}", ch),
+            Peach(ch) => write!(f, "{}", ch),
+            CaptainFalcon(ch) => write!(f, "{}", ch),
         }
     }
 }
