@@ -66,6 +66,52 @@ impl Stage {
             _ => return None,
         })
     }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Stage::FountainOfDreams     => "Fountain of Dreams",
+            Stage::PokemonStadium       => "Pokemon Stadium",
+            Stage::PrincessPeachsCastle => "Princess Peach's Castle",
+            Stage::KongoJungle          => "Kongo Jungle",
+            Stage::Brinstar             => "Brinstar",
+            Stage::Corneria             => "Corneria",
+            Stage::YoshisStory          => "Yoshi's Story",
+            Stage::Onett                => "Onett",
+            Stage::MuteCity             => "Mute City",
+            Stage::RainbowCruise        => "Rainbow Cruise",
+            Stage::JungleJapes          => "Jungle Japes",
+            Stage::GreatBay             => "Great Bay",
+            Stage::HyruleTemple         => "Hyrule Temple",
+            Stage::BrinstarDepths       => "Brinstar Depths",
+            Stage::YoshisIsland         => "Yoshi's Island",
+            Stage::GreenGreens          => "Green Greens",
+            Stage::Fourside             => "Fourside",
+            Stage::MushroomKingdomI     => "Mushroom Kingdom I",
+            Stage::MushroomKingdomII    => "Mushroom Kingdom II",
+            Stage::Venom                => "Venom",
+            Stage::PokeFloats           => "Poke Floats",
+            Stage::BigBlue              => "Big Blue",
+            Stage::IcicleMountain       => "Icicle Mountain",
+            Stage::FlatZone             => "Flat Zone",
+            Stage::DreamLandN64         => "Dream Land 64",
+            Stage::YoshisIslandN64      => "Yoshi's Island 64",
+            Stage::KongoJungleN64       => "Kongo Jungle 64",
+            Stage::Battlefield          => "Battlefield",
+            Stage::FinalDestination     => "Final Destination",
+        }
+    }
+
+    pub fn as_str_short(self) -> &'static str {
+        match self {
+            Stage::FountainOfDreams     => "Fountain",
+            Stage::PokemonStadium       => "Stadium",
+            Stage::YoshisStory          => "Yoshi's",
+            Stage::DreamLandN64         => "Dreamland",
+            Stage::Battlefield          => "Battlefield",
+            Stage::FinalDestination     => "FD",
+            _ => "Illegal",
+        }
+    }
 }
 
 
@@ -302,37 +348,7 @@ impl std::fmt::Display for CharacterColour {
 
 impl std::fmt::Display for Stage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Stage::FountainOfDreams     => write!(f, "Fountain of Dreams"),
-            Stage::PokemonStadium       => write!(f, "Pokemon Stadium"),
-            Stage::PrincessPeachsCastle => write!(f, "Princess Peach's Castle"),
-            Stage::KongoJungle          => write!(f, "Kongo Jungle"),
-            Stage::Brinstar             => write!(f, "Brinstar"),
-            Stage::Corneria             => write!(f, "Corneria"),
-            Stage::YoshisStory          => write!(f, "Yoshi's Story"),
-            Stage::Onett                => write!(f, "Onett"),
-            Stage::MuteCity             => write!(f, "Mute City"),
-            Stage::RainbowCruise        => write!(f, "Rainbow Cruise"),
-            Stage::JungleJapes          => write!(f, "Jungle Japes"),
-            Stage::GreatBay             => write!(f, "Great Bay"),
-            Stage::HyruleTemple         => write!(f, "Hyrule Temple"),
-            Stage::BrinstarDepths       => write!(f, "Brinstar Depths"),
-            Stage::YoshisIsland         => write!(f, "Yoshi's Island"),
-            Stage::GreenGreens          => write!(f, "Green Greens"),
-            Stage::Fourside             => write!(f, "Fourside"),
-            Stage::MushroomKingdomI     => write!(f, "Mushroom Kingdom I"),
-            Stage::MushroomKingdomII    => write!(f, "Mushroom Kingdom II"),
-            Stage::Venom                => write!(f, "Venom"),
-            Stage::PokeFloats           => write!(f, "Poke Floats"),
-            Stage::BigBlue              => write!(f, "Big Blue"),
-            Stage::IcicleMountain       => write!(f, "Icicle Mountain"),
-            Stage::FlatZone             => write!(f, "Flat Zone"),
-            Stage::DreamLandN64         => write!(f, "Dream Land 64"),
-            Stage::YoshisIslandN64      => write!(f, "Yoshi's Island 64"),
-            Stage::KongoJungleN64       => write!(f, "Kongo Jungle 64"),
-            Stage::Battlefield          => write!(f, "Battlefield"),
-            Stage::FinalDestination     => write!(f, "Final Destination"),
-        }
+        write!(f, "{}", self.as_str())
     }
 }
 
