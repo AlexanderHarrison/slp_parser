@@ -48,6 +48,7 @@ pub struct Item {
     pub turnip_type: u8,
     pub charge_shot_launched: bool,
     pub charge_shot_power: u8,
+    pub owner: i8,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -65,11 +66,19 @@ pub struct Game {
     pub high_port_frames: Box<[Frame]>,
 
     /// one for each frame, and one more.
-    /// You can safely do `item_ranges[frame]..item_ranges[frame+1]`
+    /// get item_range with `item_idx[frame]..item_idx[frame+1]`
     pub item_idx: Box<[u16]>,
     pub items: Box<[Item]>,
     pub info: GameInfo,
 } 
+
+impl Game {
+    pub fn items_on_frame(&self, frame: usize) -> &[Item] {
+        let start = self.item_idx[frame] as usize;
+        let end = self.item_idx[frame+1] as usize;
+        &self.items[start..end]
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct InteractionRef<'a> {

@@ -17,6 +17,10 @@ const FRAME_BOOKEND:        u8 = 0x3C;
 //    InvalidFile,
 //}
 
+// TODO not make such a mess
+// - remake Stream
+// - fix ambiguous command byte + weird byte offsets
+
 struct StreamInfo {
     pub event_payload_sizes: [u16; 255],  
 }
@@ -185,6 +189,7 @@ fn parse_item_update(stream: &mut Stream, info: &StreamInfo) -> Option<Item> {
     let turnip_type = bytes[0x26];
     let charge_shot_launched = bytes[0x27] == 1;
     let charge_shot_power = bytes[0x28];
+    let owner = bytes[0x29] as i8;
 
     Some(Item {
         type_id,
@@ -195,6 +200,7 @@ fn parse_item_update(stream: &mut Stream, info: &StreamInfo) -> Option<Item> {
         turnip_type,
         charge_shot_launched,
         charge_shot_power,
+        owner,
     })
 }
 
