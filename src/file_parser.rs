@@ -2,7 +2,7 @@ use crate::*;
 
 const EVENT_PAYLOADS:       u8 = 0x35;
 const GAME_START:           u8 = 0x36;
-//const PRE_FRAME_UPDATE:     u8 = 0x37;
+const PRE_FRAME_UPDATE:     u8 = 0x37;
 const POST_FRAME_UPDATE:    u8 = 0x38;
 const GAME_END:             u8 = 0x39;
 //const FRAME_START:          u8 = 0x3A;
@@ -35,6 +35,40 @@ impl StreamInfo {
     pub fn skip_event<'a>(&self, code: u8, stream: &mut Stream<'a>) -> Option<()> {
         self.create_event_stream(code, stream)
             .map(|_| ())
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+struct PreFrameInfo {
+    port_idx: u8,
+    analog_trigger_value: f32,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct PostFrameInfo {
+    pub character: Character,
+    pub port_idx: u8, // zero indexed
+    pub direction: Direction,
+    pub velocity: Vector,
+    pub hit_velocity: Vector,
+    pub position: Vector,
+    pub state: ActionState,
+    pub anim_frame: f32,
+    pub shield_size: f32,
+}
+
+fn merge_pre_post_frames(pre: PreFrameInfo, post: PostFrameInfo) -> Frame {
+    Frame {
+        character: post.character,
+        port_idx: post.port_idx,   
+        direction: post.direction,    
+        velocity: post.velocity,     
+        hit_velocity: post.hit_velocity, 
+        position: post.position,     
+        state: post.state,        
+        anim_frame: post.anim_frame,   
+        shield_size: post.shield_size,
+        analog_trigger_value: pre.analog_trigger_value,
     }
 }
 
@@ -73,19 +107,35 @@ pub fn parse_file(stream: &mut Stream) -> Option<Game> {
     let mut items = Vec::new();
     let mut item_idx = vec![0];
 
+    // dummy values
+    let mut pre_frame_low = PreFrameInfo { 
+        port_idx: 0,
+        analog_trigger_value: 0.0, 
+    };
+    let mut pre_frame_high = pre_frame_low;
+
     loop {
         let next_command_byte = stream.take_u8()?;
         match next_command_byte {
             ITEM_UPDATE => {
                 items.push(parse_item_update(stream, &stream_info)?);
             }
-            POST_FRAME_UPDATE => {
-                let frame = parse_frame_info(stream, &stream_info)?;
-
-                let port = port_info[frame.port_idx as usize].unwrap();
+            PRE_FRAME_UPDATE => {
+                let pre_frame = parse_pre_frame_info(stream, &stream_info)?;
+                let port = port_info[pre_frame.port_idx as usize].unwrap();
                 match port {
-                    Port::Low => low_port_frames.push(frame),
-                    Port::High => high_port_frames.push(frame),
+                    Port::Low => pre_frame_low = pre_frame,
+                    Port::High => pre_frame_high = pre_frame,
+                }
+            }
+            POST_FRAME_UPDATE => {
+                let post_frame = parse_post_frame_info(stream, &stream_info)?;
+
+                let port = port_info[post_frame.port_idx as usize].unwrap();
+
+                match port {
+                    Port::Low => low_port_frames.push(merge_pre_post_frames(pre_frame_low, post_frame)),
+                    Port::High => high_port_frames.push(merge_pre_post_frames(pre_frame_high, post_frame)),
                 }
             }
             FRAME_BOOKEND => {
@@ -137,8 +187,8 @@ fn parse_game_start(stream: &mut Stream, info: &StreamInfo) -> Option<GameInfo> 
     let substream = info.create_event_stream(GAME_START, stream)?;
     let bytes = substream.as_slice();
 
-    // requires version >= 0.2.0
-    assert!(bytes[1] > 0 || bytes[2] >= 2);
+    // requires version >= 3.14.0
+    assert!(bytes[0] > 3 || bytes[1] >= 14);
 
     let stage_start = 0x4 + 0xE;
     let stage = u16::from_be_bytes(bytes[stage_start..(stage_start+2)].try_into().unwrap());
@@ -155,7 +205,7 @@ fn parse_game_start(stream: &mut Stream, info: &StreamInfo) -> Option<GameInfo> 
     if port_iter.next().is_some() { return None }
 
     let low_char_idx  = bytes[0x04 + 0x60 + 0x24 * low_port_idx as usize];
-    let low_colour_idx  = bytes[0x04 + 0x63 + 0x24 * low_port_idx as usize];
+    let low_colour_idx = bytes[0x04 + 0x63 + 0x24 * low_port_idx as usize];
     let high_char_idx = bytes[0x04 + 0x60 + 0x24 * high_port_idx as usize];
     let high_colour_idx = bytes[0x04 + 0x63 + 0x24 * high_port_idx as usize];
     let low_char  = Character::from_u8_external(low_char_idx)?;
@@ -163,13 +213,59 @@ fn parse_game_start(stream: &mut Stream, info: &StreamInfo) -> Option<GameInfo> 
     let low_starting_character  = CharacterColour::from_character_and_colour(low_char, low_colour_idx)?;
     let high_starting_character = CharacterColour::from_character_and_colour(high_char, high_colour_idx)?;
 
+    let match_id = &bytes[(0x04 + 0x2BE)..(0x04 + 0x2BE + 51)];
+    let start_time = parse_match_id(match_id)?;
+
     Some(GameInfo {
         stage, 
         low_port_idx, 
         low_starting_character,
         high_port_idx,
         high_starting_character,
+        start_time,
     })
+}
+
+fn parse_match_id(match_id: &[u8]) -> Option<Time> {
+    // unranked-2023-10-04T03:43:00.64-0
+  
+    #[inline(always)]
+    const fn conv(n: u8) -> u8 { n - b'0' }
+
+    let mut i = 0;
+    loop {
+        let b = match_id[i];
+        if b == b'-' { break }
+        if b == 0 { return None }
+        i += 1;
+    }
+
+    if match_id[i..].len() < 23 { return None; }
+
+    i += 1;
+
+    // I think it is safe to assume year will be 4 characters
+    let d1 = conv(match_id[i]  ) as u16;
+    let d2 = conv(match_id[i+1]) as u16;
+    let d3 = conv(match_id[i+2]) as u16;
+    let d4 = conv(match_id[i+3]) as u16;
+    let year = d1 * 1000 + d2 * 100 + d3 * 10 + d4;
+    let month = conv(match_id[i+5]) * 10 + conv(match_id[i+6]);
+    let day = conv(match_id[i+8]) * 10 + conv(match_id[i+9]);
+    let hour = conv(match_id[i+11]) * 10 + conv(match_id[i+12]);
+    let minute = conv(match_id[i+14]) * 10 + conv(match_id[i+15]);
+    let second = conv(match_id[i+17]) * 10 + conv(match_id[i+18]);
+    let msec = conv(match_id[i+20]) * 10 + conv(match_id[i+21]);
+
+    let time = ((year as u64) << 48)
+        | ((month as u64) << 40)
+        | ((day as u64) << 32)
+        | ((hour as u64) << 24)
+        | ((minute as u64) << 16)
+        | ((second as u64) << 8)
+        | msec as u64;
+
+    Some(Time(time))
 }
 
 fn parse_item_update(stream: &mut Stream, info: &StreamInfo) -> Option<Item> {
@@ -204,7 +300,20 @@ fn parse_item_update(stream: &mut Stream, info: &StreamInfo) -> Option<Item> {
     })
 }
 
-fn parse_frame_info(stream: &mut Stream, info: &StreamInfo) -> Option<Frame> {
+fn parse_pre_frame_info(stream: &mut Stream, info: &StreamInfo) -> Option<PreFrameInfo> {
+    let substream = info.create_event_stream(PRE_FRAME_UPDATE, stream)?;
+    let bytes = substream.as_slice();
+
+    let port_idx = bytes[0x4];
+    let analog_trigger_value = f32::from_be_bytes(bytes.get(0x28..(0x28 + 4))?.try_into().unwrap());
+
+    Some(PreFrameInfo {
+        port_idx,
+        analog_trigger_value,
+    })
+}
+
+fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> Option<PostFrameInfo> {
     let substream = info.create_event_stream(POST_FRAME_UPDATE, stream)?;
     let bytes = substream.as_slice();
 
@@ -227,9 +336,10 @@ fn parse_frame_info(stream: &mut Stream, info: &StreamInfo) -> Option<Frame> {
     };
     let state_u16 = u16::from_be_bytes(bytes[0x7..0x9].try_into().unwrap());
     let state = ActionState::from_u16(state_u16, character)?;
+    let shield_size = f32::from_be_bytes(bytes[0x19..(0x19 + 4)].try_into().unwrap());
     let anim_frame = f32::from_be_bytes(bytes[0x21..0x25].try_into().unwrap());
 
-    Some(Frame {
+    Some(PostFrameInfo {
         port_idx,
         character,
         direction,
@@ -238,6 +348,7 @@ fn parse_frame_info(stream: &mut Stream, info: &StreamInfo) -> Option<Frame> {
         hit_velocity,
         state,
         anim_frame,
+        shield_size,
     })
 }
 

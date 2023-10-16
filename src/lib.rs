@@ -36,6 +36,8 @@ pub struct Frame {
     pub position: Vector,
     pub state: ActionState,
     pub anim_frame: f32,
+    pub shield_size: f32,
+    pub analog_trigger_value: f32,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -58,6 +60,7 @@ pub struct GameInfo {
     pub low_starting_character: CharacterColour,
     pub high_port_idx: u8,
     pub high_starting_character: CharacterColour,
+    pub start_time: Time,
 }
 
 #[derive(Debug)]
@@ -206,3 +209,47 @@ pub enum Direction {
     Right
 }
 
+#[derive(Copy, Clone, Debug, PartialOrd, Ord, Eq, PartialEq)]
+pub struct Time(u64);
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct TimeFields {
+    pub year: u16,
+    pub month: u8,
+    pub day: u8,
+    pub hour: u8,
+    pub minute: u8,
+    pub second: u8,
+
+    /// 0 -> 99
+    pub millisecond: u8,
+}
+
+impl Time {
+    pub fn fields(self) -> TimeFields {
+        let t = self.0;
+        TimeFields {
+            year: (t >> 48) as u16,
+            month: (t >> 40) as u8,
+            day: (t >> 32) as u8,
+            hour: (t >> 24) as u8,
+            minute: (t >> 16) as u8,
+            second: (t >> 8) as u8,
+            millisecond: t as u8,
+        }
+    }
+}
+
+impl From<TimeFields> for Time {
+    fn from(fields: TimeFields) -> Time {
+        let time = ((fields.year as u64) << 48)
+            | ((fields.month as u64) << 40)
+            | ((fields.day as u64) << 32)
+            | ((fields.hour as u64) << 24)
+            | ((fields.minute as u64) << 16)
+            | ((fields.second as u64) << 8)
+            | fields.millisecond as u64;
+
+        Time(time)
+    }
+}
