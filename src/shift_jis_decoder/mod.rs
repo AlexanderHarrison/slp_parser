@@ -26,7 +26,7 @@
 
 mod shift_jis_1997;
 
-/// Adapted from picori: https://github.com/Julgodis/picori.
+/// Adapted from picori: https://github.com/Julgodis/picori
 ///
 /// Returns number of bytes written.
 /// Stops decoding on null byte.
@@ -69,7 +69,16 @@ pub fn decode_shift_jis(bytes: &[u8], buffer: &mut String) -> Option<u32> {
                 let index = offset as usize + relative;
                 let value = shift_jis_1997::SJIS_1997_UTF8_S[index];
                 if value == 0 { return None }
-                buffer.push(unsafe { char::from_u32_unchecked(value as u32) })
+
+                // would prefer to not have to pull in this dependency,
+                // but picori translates special characters into their fullwidth
+                // variants, so I use decancer to prune that.
+                // I could be go through the generated tables to fix it but that is too much work.
+                match decancer::cure_char(unsafe { char::from_u32_unchecked(value as u32) }) {
+                    decancer::Translation::Character(c) => buffer.push(c),
+                    decancer::Translation::String(s) => buffer.push_str(s),
+                    decancer::Translation::None => (),
+                }
             }
             _ => return None,
         }

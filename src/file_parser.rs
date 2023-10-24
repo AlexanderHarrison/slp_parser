@@ -126,28 +126,34 @@ pub fn parse_file_info(reader: &mut (impl std::io::Read + std::io::Seek)) -> Slp
     })
 }
 
-pub fn parse_detailed_file_info(_stream: &mut Stream)-> SlpResult<DetailedGameInfo> {
-    todo!();
-    //skip_raw_header(stream)?;
-    //let stream_info = parse_event_payloads(stream)?;
-    //let game_info = parse_game_start(stream, &stream_info)?;
+pub fn parse_detailed_file_info(stream: &mut Stream)-> SlpResult<DetailedGameInfo> {
+    skip_raw_header(stream)?;
+    let stream_info = parse_event_payloads(stream)?;
+    let game_info = parse_game_start(stream, &stream_info)?;
 
-    //let mut end_stock_counts = [0u8; 4];
+    let mut stocks = [0u32; 4];
 
-    //loop {
-    //    let next_command_byte = stream.take_u8()?;
-    //    match next_command_byte {
-    //        _ =>
-    //        GAME_END => { break }
-    //    }
-    //}
+    loop {
+        let next_command_byte = stream.take_u8()?;
+        match next_command_byte {
+            POST_FRAME_UPDATE => {
+                let substream = stream_info.create_event_stream(POST_FRAME_UPDATE, stream)?;
+                let bytes = substream.as_slice();
 
-    //Some(DetailedGameInfo {
-    //    game_info,
-    //    end_stock_counts: 0,
-    //    game_length: 0,
-    //})
+                let stock_count = bytes[0x21];
+                let port = bytes[0x05] & 3; // avoid bounds check for fun
 
+                stocks[port as usize] = stock_count as u32;
+            }
+            GAME_END => { break }
+            _ => stream_info.skip_event(next_command_byte, stream)?,
+        }
+    }
+
+    Ok(DetailedGameInfo {
+        low_end_stock_counts: stocks[game_info.low_port_idx as usize] as u8,
+        high_end_stock_counts: stocks[game_info.high_port_idx as usize] as u8,
+    })
 }
 
 
@@ -287,10 +293,10 @@ fn parse_game_start(stream: &mut Stream, info: &StreamInfo) -> SlpResult<GameSta
     let high_starting_character = CharacterColour::from_character_and_colour(high_char, high_colour_idx)
         .ok_or(SlpError::InvalidFile)?;
 
-    let low_name_offset = 0x04 + 0x221 + 0xA * low_port_idx as usize;
+    let low_name_offset = 0x1A5 + 0x1F * low_port_idx as usize - 1;
     let low_name = bytes[low_name_offset..low_name_offset+32].try_into().unwrap();
 
-    let high_name_offset = 0x04 + 0x221 + 0xA * high_port_idx as usize;
+    let high_name_offset = 0x1A5 + 0x1F * high_port_idx as usize - 1;
     let high_name = bytes[high_name_offset..high_name_offset+32].try_into().unwrap();
 
     let match_id = &bytes[(0x04 + 0x2BE)..(0x04 + 0x2BE + 51)];

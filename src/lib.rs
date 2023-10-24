@@ -68,12 +68,11 @@ pub struct Item {
     pub owner: i8,
 }
 
-// requires parsing entire game rather than just game start
+// requires parsing entire game rather than just game start + metadata
 #[derive(Copy, Clone, Debug)]
 pub struct DetailedGameInfo {
-    pub game_info: GameInfo,
-    pub end_stock_counts: u8, // 2 nibbles,
-    pub game_length: u16,     // in frames
+    pub low_end_stock_counts: u8,
+    pub high_end_stock_counts: u8,
 }
 
 #[derive(Copy, Clone, Debug)]
