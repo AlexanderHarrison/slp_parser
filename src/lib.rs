@@ -10,6 +10,21 @@ pub use states::*;
 mod game_enums;
 pub use game_enums::*;
 
+mod shift_jis_decoder;
+pub use shift_jis_decoder::*;
+
+pub type SlpResult<T> = Result<T, SlpError>;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum SlpError {
+    OutdatedFile,
+    InvalidFile,
+    NotTwoPlayers,
+
+    FileDoesNotExist,
+    IOError,
+}
+
 #[derive(Clone, Debug)]
 pub struct Action {
     pub start_state: BroadState,
@@ -53,6 +68,14 @@ pub struct Item {
     pub owner: i8,
 }
 
+// requires parsing entire game rather than just game start
+#[derive(Copy, Clone, Debug)]
+pub struct DetailedGameInfo {
+    pub game_info: GameInfo,
+    pub end_stock_counts: u8, // 2 nibbles,
+    pub game_length: u16,     // in frames
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct GameInfo {
     pub stage: Stage,
@@ -61,6 +84,25 @@ pub struct GameInfo {
     pub high_port_idx: u8,
     pub high_starting_character: CharacterColour,
     pub start_time: Time,
+    pub duration: u32,
+
+    // null terminated Shift JIS strings. zero length if does not exist
+    pub low_name: [u8; 32],
+    pub high_name: [u8; 32],
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct GameStartInfo {
+    pub stage: Stage,
+    pub low_port_idx: u8,
+    pub low_starting_character: CharacterColour,
+    pub high_port_idx: u8,
+    pub high_starting_character: CharacterColour,
+    pub start_time: Time,
+
+    // null terminated Shift JIS strings. zero length if does not exist
+    pub low_name: [u8; 32],
+    pub high_name: [u8; 32],
 }
 
 #[derive(Debug)]
@@ -72,7 +114,7 @@ pub struct Game {
     /// get item_range with `item_idx[frame]..item_idx[frame+1]`
     pub item_idx: Box<[u16]>,
     pub items: Box<[Item]>,
-    pub info: GameInfo,
+    pub info: GameStartInfo,
 } 
 
 impl Game {
@@ -95,16 +137,16 @@ pub struct Interaction {
     pub player_response: Action,
 }
 
-pub fn read_info_in_dir(path: impl AsRef<std::path::Path>) -> Option<impl Iterator<Item=(Box<std::path::Path>, GameInfo)>> {
-    Some(std::fs::read_dir(path)
-        .ok()?
+pub fn read_info_in_dir(path: impl AsRef<std::path::Path>) -> SlpResult<impl Iterator<Item=(Box<std::path::Path>, GameInfo)>> {
+    Ok(std::fs::read_dir(path)
+        .map_err(|_| SlpError::IOError)?
         .filter_map(|entry| {
             if let Ok(entry) = entry {
                 if let Ok(ftype) = entry.file_type() {
                     if ftype.is_file() {
                         let path = entry.path();
                         if path.extension() == Some(std::ffi::OsStr::new("slp")) {
-                            if let Some(info) = read_info(&path) {
+                            if let Ok(info) = read_info(&path) {
                                 return Some((path.into_boxed_path(), info))
                             }
                         }
@@ -115,32 +157,68 @@ pub fn read_info_in_dir(path: impl AsRef<std::path::Path>) -> Option<impl Iterat
         }))
 }
 
-pub fn read_info(path: &std::path::Path) -> Option<GameInfo> {
-    let mut file = std::fs::File::open(path).ok()?;
-    file_parser::parse_file_info(&mut file)
+pub fn read_detailed_info_in_dir(path: impl AsRef<std::path::Path>) 
+    -> SlpResult<impl Iterator<Item=(Box<std::path::Path>, DetailedGameInfo)>> 
+{
+    Ok(std::fs::read_dir(path)
+        .map_err(|_| SlpError::IOError)?
+        .filter_map(|entry| {
+            if let Ok(entry) = entry {
+                if let Ok(ftype) = entry.file_type() {
+                    if ftype.is_file() {
+                        let path = entry.path();
+                        if path.extension() == Some(std::ffi::OsStr::new("slp")) {
+                            if let Ok(info) = read_detailed_info(&path) {
+                                return Some((path.into_boxed_path(), info))
+                            }
+                        }
+                    }
+                }
+            }
+            None
+        }))
 }
 
-pub fn read_game(path: &std::path::Path) -> Option<Game> {
-    use std::io::Read;
 
-    let mut slippi_file = std::fs::File::open(path).expect("error opening slippi file");
-    let mut buf = Vec::new();
-    slippi_file.read_to_end(&mut buf).unwrap();
-
-    file_parser::parse_file(&mut file_parser::Stream::new(&buf))
+pub fn read_info(path: &std::path::Path) -> SlpResult<GameInfo> {
+    let mut file = std::fs::File::open(path).map_err(|_| SlpError::FileDoesNotExist)?;
+    let info = file_parser::parse_file_info(&mut file)?;
+    Ok(info)
 }
 
-pub fn parse_game(game: &std::path::Path, port: Port) -> Option<Box<[Action]>> {
+pub fn read_detailed_info(path: &std::path::Path) -> SlpResult<DetailedGameInfo> {
     use std::io::Read;
 
-    let mut slippi_file = std::fs::File::open(game).expect("error opening slippi file");
+    let mut file = std::fs::File::open(path).map_err(|_| SlpError::FileDoesNotExist)?;
     let mut buf = Vec::new();
-    slippi_file.read_to_end(&mut buf).unwrap();
+    file.read_to_end(&mut buf).unwrap();
+
+    let info = file_parser::parse_detailed_file_info(&mut file_parser::Stream::new(&buf))?;
+    Ok(info)
+}
+
+pub fn read_game(path: &std::path::Path) -> SlpResult<Game> {
+    use std::io::Read;
+
+    let mut file = std::fs::File::open(path).map_err(|_| SlpError::FileDoesNotExist)?;
+    let mut buf = Vec::new();
+    file.read_to_end(&mut buf).unwrap();
+
+    let game = file_parser::parse_file(&mut file_parser::Stream::new(&buf))?;
+    Ok(game)
+}
+
+pub fn parse_game(game: &std::path::Path, port: Port) -> SlpResult<Box<[Action]>> {
+    use std::io::Read;
+
+    let mut file = std::fs::File::open(game).map_err(|_| SlpError::FileDoesNotExist)?;
+    let mut buf = Vec::new();
+    file.read_to_end(&mut buf).map_err(|_| SlpError::IOError)?;
 
     parse_buf(&buf, port)
 }
 
-pub fn parse_buf(buf: &[u8], port: Port) -> Option<Box<[Action]>> {
+pub fn parse_buf(buf: &[u8], port: Port) -> SlpResult<Box<[Action]>> {
     let mut stream = file_parser::Stream::new(buf);
     let game = file_parser::parse_file(&mut stream)?;
 
@@ -149,7 +227,7 @@ pub fn parse_buf(buf: &[u8], port: Port) -> Option<Box<[Action]>> {
         Port::Low => &game.low_port_frames,
     };
 
-    Some(parser::parse(frames).into_boxed_slice())
+    Ok(parser::parse(frames).into_boxed_slice())
 }
 
 macro_rules! unwrap_or {

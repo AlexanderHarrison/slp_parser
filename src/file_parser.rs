@@ -10,13 +10,6 @@ const ITEM_UPDATE:          u8 = 0x3B;
 const FRAME_BOOKEND:        u8 = 0x3C;
 //const GECKO_LIST:           u8 = 0x3D;
 
-//#[derive(Copy, Clone, Debug)]
-//pub enum ParseError {
-//    OutdatedSlippiFile,
-//    InvalidStage,
-//    InvalidFile,
-//}
-
 // TODO not make such a mess
 // - remake Stream
 // - fix ambiguous command byte + weird byte offsets
@@ -26,13 +19,13 @@ struct StreamInfo {
 }
 
 impl StreamInfo {
-    pub fn create_event_stream<'a>(&self, code: u8, stream: &mut Stream<'a>) -> Option<SubStream<'a>> {
+    pub fn create_event_stream<'a>(&self, code: u8, stream: &mut Stream<'a>) -> SlpResult<SubStream<'a>> {
         let sub_size = self.event_payload_sizes[code as usize];
-        if sub_size == 0 { return None }
-        Some(stream.sub_stream(sub_size as usize))
+        if sub_size == 0 { return Err(SlpError::InvalidFile) }
+        Ok(stream.sub_stream(sub_size as usize))
     }
 
-    pub fn skip_event<'a>(&self, code: u8, stream: &mut Stream<'a>) -> Option<()> {
+    pub fn skip_event<'a>(&self, code: u8, stream: &mut Stream<'a>) -> SlpResult<()> {
         self.create_event_stream(code, stream)
             .map(|_| ())
     }
@@ -73,26 +66,92 @@ fn merge_pre_post_frames(pre: PreFrameInfo, post: PostFrameInfo) -> Frame {
 }
 
 // don't use stream - usually this is called for many files at a time
-pub fn parse_file_info(reader: &mut impl std::io::Read) -> Option<GameInfo> {
+pub fn parse_file_info(reader: &mut (impl std::io::Read + std::io::Seek)) -> SlpResult<GameInfo> {
     let mut buf = [0u8; 1024];
     
-    let mut read_count = reader.read(&mut buf).ok()?;
+    let mut read_count = reader.read(&mut buf)
+        .map_err(|_| SlpError::IOError)?;
 
     // unlikely
     while read_count < 1024 {
-        let read = reader.read(&mut buf[read_count..]).ok()?;
+        let read = reader.read(&mut buf[read_count..])
+            .map_err(|_| SlpError::IOError)?;
         if read == 0 { break } // file smaller than 1024 somehow
         read_count += read;
     }
 
     let mut stream = Stream::new(&buf[0..read_count]);
 
-    skip_raw_header(&mut stream)?;
+    let raw_len = skip_raw_header(&mut stream)?;
     let stream_info = parse_event_payloads(&mut stream)?;
-    parse_game_start(&mut stream, &stream_info)
+    let game_start_info = parse_game_start(&mut stream, &stream_info)?;
+
+    let header_len: u64 = 14;
+    reader.seek(std::io::SeekFrom::Start(header_len + raw_len as u64))
+        .map_err(|_| SlpError::IOError)?;
+    let read_count = reader.read(&mut buf)
+        .map_err(|_| SlpError::IOError)?;
+
+    let duration;
+    if let Some(i) = buf[..read_count].windows(9).position(|w| w == b"lastFrame") {
+        duration = u32::from_be_bytes(buf[(i+10)..(i+14)].try_into().unwrap());
+    } else {
+        duration = u32::MAX;
+    }
+
+    //for b in &buf[..read_count] {
+    //    let b = *b;
+    //    if let Some(c) = char::from_u32(b as u32) {
+    //        if c.is_ascii() {
+    //            print!("{c}");
+    //        } else {
+    //        print!("0x{:x}", b);
+    //        }
+    //    } else {
+    //        print!("0x{:x}", b);
+    //    }
+    //}
+    //    println!();
+
+    Ok(GameInfo {
+        stage: game_start_info.stage,
+        low_port_idx: game_start_info.low_port_idx,
+        low_starting_character: game_start_info.low_starting_character,
+        high_port_idx: game_start_info.high_port_idx,
+        high_starting_character: game_start_info.high_starting_character,
+        start_time: game_start_info.start_time,
+        low_name: game_start_info.low_name,
+        high_name: game_start_info.high_name,
+        duration,
+    })
 }
 
-pub fn parse_file(stream: &mut Stream) -> Option<Game> {
+pub fn parse_detailed_file_info(_stream: &mut Stream)-> SlpResult<DetailedGameInfo> {
+    todo!();
+    //skip_raw_header(stream)?;
+    //let stream_info = parse_event_payloads(stream)?;
+    //let game_info = parse_game_start(stream, &stream_info)?;
+
+    //let mut end_stock_counts = [0u8; 4];
+
+    //loop {
+    //    let next_command_byte = stream.take_u8()?;
+    //    match next_command_byte {
+    //        _ =>
+    //        GAME_END => { break }
+    //    }
+    //}
+
+    //Some(DetailedGameInfo {
+    //    game_info,
+    //    end_stock_counts: 0,
+    //    game_length: 0,
+    //})
+
+}
+
+
+pub fn parse_file(stream: &mut Stream) -> SlpResult<Game> {
     skip_raw_header(stream)?;
     let stream_info = parse_event_payloads(stream)?;
     let game_info = parse_game_start(stream, &stream_info)?;
@@ -146,10 +205,19 @@ pub fn parse_file(stream: &mut Stream) -> Option<Game> {
                 if frame_num + 1 as usize != low_port_frames.len() {
                     low_port_frames[frame_num] = low_port_frames[low_port_frames.len()-1];
                     high_port_frames[frame_num] = high_port_frames[low_port_frames.len()-1];
-                    item_idx[frame_num] = items.len() as _;
                     low_port_frames.truncate(frame_num+1);
                     high_port_frames.truncate(frame_num+1);
-                    item_idx.truncate(frame_num+1);
+
+                    // TODO untested eek
+                    let item_idx_restart = item_idx[frame_num] as usize;
+                    let item_start_this_frame = item_idx[item_idx.len()-1] as usize;
+                    let item_count_this_frame = items.len() - item_start_this_frame;
+                    for i in 0..item_count_this_frame {
+                        items[item_idx_restart+i] = items[item_start_this_frame+i];
+                    }
+                    items.truncate(item_idx_restart+item_count_this_frame);
+                    item_idx[frame_num+1] = items.len() as _;
+                    item_idx.truncate(frame_num+2);
                 } else {
                     item_idx.push(items.len() as _);
                 }
@@ -159,7 +227,7 @@ pub fn parse_file(stream: &mut Stream) -> Option<Game> {
         }
     }
 
-    Some(Game {
+    Ok(Game {
         high_port_frames: high_port_frames.into_boxed_slice(), 
         low_port_frames: low_port_frames.into_boxed_slice(),
         item_idx: item_idx.into_boxed_slice(),
@@ -168,7 +236,7 @@ pub fn parse_file(stream: &mut Stream) -> Option<Game> {
     })
 }
 
-fn skip_raw_header(stream: &mut Stream) -> Option<()> {
+fn skip_raw_header(stream: &mut Stream) -> SlpResult<u32> {
     const HEADER: &'static str = "raw[$U#l";
     for c in HEADER.bytes() {
         let mut next_b = stream.take_u8()?;
@@ -177,22 +245,24 @@ fn skip_raw_header(stream: &mut Stream) -> Option<()> {
         }
     }
 
-    stream.take_const_n::<4>()?;
-    Some(())
+    stream.take_u32()
 }
 
-fn parse_game_start(stream: &mut Stream, info: &StreamInfo) -> Option<GameInfo> {
+fn parse_game_start(stream: &mut Stream, info: &StreamInfo) -> SlpResult<GameStartInfo> {
     // note: takes a byte here
-    if stream.take_u8() != Some(GAME_START) { return None };
+    if stream.take_u8() != Ok(GAME_START) { return Err(SlpError::InvalidFile) };
     let substream = info.create_event_stream(GAME_START, stream)?;
     let bytes = substream.as_slice();
 
     // requires version >= 3.14.0
-    assert!(bytes[0] > 3 || bytes[1] >= 14);
+    if bytes[0] <= 3 && bytes[1] < 14 {
+        return Err(SlpError::OutdatedFile)
+    }
 
     let stage_start = 0x4 + 0xE;
     let stage = u16::from_be_bytes(bytes[stage_start..(stage_start+2)].try_into().unwrap());
-    let stage = Stage::from_u16(stage)?;
+    let stage = Stage::from_u16(stage)
+        .ok_or(SlpError::InvalidFile)?;
 
     let mut port_types = [0u8; 4];
     for i in 0..4 {
@@ -200,33 +270,45 @@ fn parse_game_start(stream: &mut Stream, info: &StreamInfo) -> Option<GameInfo> 
     }
 
     let mut port_iter = port_types.iter().enumerate().filter_map(|(i,p)| if *p != 3 { Some(i) } else { None });
-    let low_port_idx = port_iter.next()? as _;
-    let high_port_idx = port_iter.next()? as _;
-    if port_iter.next().is_some() { return None }
+    let low_port_idx = port_iter.next().ok_or(SlpError::NotTwoPlayers)? as _;
+    let high_port_idx = port_iter.next().ok_or(SlpError::NotTwoPlayers)? as _;
+    if port_iter.next().is_some() { return Err(SlpError::NotTwoPlayers) }
 
     let low_char_idx  = bytes[0x04 + 0x60 + 0x24 * low_port_idx as usize];
     let low_colour_idx = bytes[0x04 + 0x63 + 0x24 * low_port_idx as usize];
     let high_char_idx = bytes[0x04 + 0x60 + 0x24 * high_port_idx as usize];
     let high_colour_idx = bytes[0x04 + 0x63 + 0x24 * high_port_idx as usize];
-    let low_char  = Character::from_u8_external(low_char_idx)?;
-    let high_char = Character::from_u8_external(high_char_idx)?;
-    let low_starting_character  = CharacterColour::from_character_and_colour(low_char, low_colour_idx)?;
-    let high_starting_character = CharacterColour::from_character_and_colour(high_char, high_colour_idx)?;
+    let low_char  = Character::from_u8_external(low_char_idx)
+        .ok_or(SlpError::InvalidFile)?;
+    let high_char = Character::from_u8_external(high_char_idx)
+        .ok_or(SlpError::InvalidFile)?;
+    let low_starting_character  = CharacterColour::from_character_and_colour(low_char, low_colour_idx)
+        .ok_or(SlpError::InvalidFile)?;
+    let high_starting_character = CharacterColour::from_character_and_colour(high_char, high_colour_idx)
+        .ok_or(SlpError::InvalidFile)?;
+
+    let low_name_offset = 0x04 + 0x221 + 0xA * low_port_idx as usize;
+    let low_name = bytes[low_name_offset..low_name_offset+32].try_into().unwrap();
+
+    let high_name_offset = 0x04 + 0x221 + 0xA * high_port_idx as usize;
+    let high_name = bytes[high_name_offset..high_name_offset+32].try_into().unwrap();
 
     let match_id = &bytes[(0x04 + 0x2BE)..(0x04 + 0x2BE + 51)];
     let start_time = parse_match_id(match_id)?;
 
-    Some(GameInfo {
+    Ok(GameStartInfo {
         stage, 
         low_port_idx, 
         low_starting_character,
         high_port_idx,
         high_starting_character,
         start_time,
+        low_name,
+        high_name,
     })
 }
 
-fn parse_match_id(match_id: &[u8]) -> Option<Time> {
+fn parse_match_id(match_id: &[u8]) -> SlpResult<Time> {
     // unranked-2023-10-04T03:43:00.64-0
   
     #[inline(always)]
@@ -236,15 +318,14 @@ fn parse_match_id(match_id: &[u8]) -> Option<Time> {
     loop {
         let b = match_id[i];
         if b == b'-' { break }
-        if b == 0 { return None }
+        if b == 0 { return Err(SlpError::InvalidFile) }
         i += 1;
     }
 
-    if match_id[i..].len() < 23 { return None; }
+    if match_id[i..].len() < 23 { return Err(SlpError::InvalidFile) }
 
     i += 1;
 
-    // I think it is safe to assume year will be 4 characters
     let d1 = conv(match_id[i]  ) as u16;
     let d2 = conv(match_id[i+1]) as u16;
     let d3 = conv(match_id[i+2]) as u16;
@@ -265,21 +346,25 @@ fn parse_match_id(match_id: &[u8]) -> Option<Time> {
         | ((second as u64) << 8)
         | msec as u64;
 
-    Some(Time(time))
+    Ok(Time(time))
 }
 
-fn parse_item_update(stream: &mut Stream, info: &StreamInfo) -> Option<Item> {
+fn parse_item_update(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Item> {
     // note: takes a byte here
     let substream = info.create_event_stream(ITEM_UPDATE, stream)?;
     let bytes = substream.as_slice();
 
-    let type_id = u16::from_be_bytes(bytes.get(0x04..0x06)?.try_into().unwrap());
+    if bytes.len() < 0x2A {
+        return Err(SlpError::InvalidFile);
+    }
+
+    let type_id = u16::from_be_bytes(bytes[0x04..0x06].try_into().unwrap());
     let state = bytes[0x06];
     let direction_f = f32::from_be_bytes(bytes[0x07..0x0B].try_into().unwrap());
     let direction = if direction_f == 1.0 { Direction::Right } else { Direction::Left };
     let position = Vector {
-        x: f32::from_be_bytes(bytes.get(0x13..0x17)?.try_into().unwrap()),
-        y: f32::from_be_bytes(bytes.get(0x17..0x1B)?.try_into().unwrap()),
+        x: f32::from_be_bytes(bytes[0x13..0x17].try_into().unwrap()),
+        y: f32::from_be_bytes(bytes[0x17..0x1B].try_into().unwrap()),
     };
     let missile_type = bytes[0x25];
     let turnip_type = bytes[0x26];
@@ -287,7 +372,7 @@ fn parse_item_update(stream: &mut Stream, info: &StreamInfo) -> Option<Item> {
     let charge_shot_power = bytes[0x28];
     let owner = bytes[0x29] as i8;
 
-    Some(Item {
+    Ok(Item {
         type_id,
         state,
         direction,
@@ -300,46 +385,57 @@ fn parse_item_update(stream: &mut Stream, info: &StreamInfo) -> Option<Item> {
     })
 }
 
-fn parse_pre_frame_info(stream: &mut Stream, info: &StreamInfo) -> Option<PreFrameInfo> {
+fn parse_pre_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<PreFrameInfo> {
     let substream = info.create_event_stream(PRE_FRAME_UPDATE, stream)?;
     let bytes = substream.as_slice();
 
-    let port_idx = bytes[0x4];
-    let analog_trigger_value = f32::from_be_bytes(bytes.get(0x28..(0x28 + 4))?.try_into().unwrap());
+    if bytes.len() < 0x2C {
+        return Err(SlpError::InvalidFile);
+    }
 
-    Some(PreFrameInfo {
+    let port_idx = bytes[0x4];
+    let analog_trigger_value = f32::from_be_bytes(bytes[0x28..0x2C].try_into().unwrap());
+
+    Ok(PreFrameInfo {
         port_idx,
         analog_trigger_value,
     })
 }
 
-fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> Option<PostFrameInfo> {
+fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<PostFrameInfo> {
     let substream = info.create_event_stream(POST_FRAME_UPDATE, stream)?;
     let bytes = substream.as_slice();
 
+    if bytes.len() < 0x44 {
+        return Err(SlpError::InvalidFile);
+    }
+
     let port_idx = bytes[0x4];
-    let character = Character::from_u8_internal(bytes[0x6])?;
+    let character = Character::from_u8_internal(bytes[0x6])
+        .ok_or(SlpError::InvalidFile)?;
 
     let direction_f = f32::from_be_bytes(bytes[0x11..0x15].try_into().unwrap());
     let direction = if direction_f == 1.0 { Direction::Right } else { Direction::Left };
+
     let velocity = Vector {
-        x: f32::from_be_bytes(bytes.get(0x34..0x38)?.try_into().unwrap()),
-        y: f32::from_be_bytes(bytes.get(0x38..0x3c)?.try_into().unwrap()),
+        x: f32::from_be_bytes(bytes[0x34..0x38].try_into().unwrap()),
+        y: f32::from_be_bytes(bytes[0x38..0x3c].try_into().unwrap()),
     };
     let hit_velocity = Vector {
-        x: f32::from_be_bytes(bytes.get(0x3c..0x40)?.try_into().unwrap()),
-        y: f32::from_be_bytes(bytes.get(0x40..0x44)?.try_into().unwrap()),
+        x: f32::from_be_bytes(bytes[0x3C..0x40].try_into().unwrap()),
+        y: f32::from_be_bytes(bytes[0x40..0x44].try_into().unwrap()),
     };
     let position = Vector {
-        x: f32::from_be_bytes(bytes.get(0x9..(0x9 + 4))?.try_into().unwrap()),
-        y: f32::from_be_bytes(bytes.get(0xD..(0xD + 4))?.try_into().unwrap()),
+        x: f32::from_be_bytes(bytes[0x9..0xD].try_into().unwrap()),
+        y: f32::from_be_bytes(bytes[0xD..0x11].try_into().unwrap()),
     };
     let state_u16 = u16::from_be_bytes(bytes[0x7..0x9].try_into().unwrap());
-    let state = ActionState::from_u16(state_u16, character)?;
-    let shield_size = f32::from_be_bytes(bytes[0x19..(0x19 + 4)].try_into().unwrap());
+    let state = ActionState::from_u16(state_u16, character)
+        .ok_or(SlpError::InvalidFile)?;
+    let shield_size = f32::from_be_bytes(bytes[0x19..0x1D].try_into().unwrap());
     let anim_frame = f32::from_be_bytes(bytes[0x21..0x25].try_into().unwrap());
 
-    Some(PostFrameInfo {
+    Ok(PostFrameInfo {
         port_idx,
         character,
         direction,
@@ -352,8 +448,8 @@ fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> Option<PostF
     })
 }
 
-fn parse_event_payloads(stream: &mut Stream) -> Option<StreamInfo> {
-    if stream.take_u8() != Some(EVENT_PAYLOADS) { return None }
+fn parse_event_payloads(stream: &mut Stream) -> SlpResult<StreamInfo> {
+    if stream.take_u8() != Ok(EVENT_PAYLOADS) { return Err(SlpError::InvalidFile) }
     
     let info_size = stream.take_u8()?;
     let event_count = (info_size - 1) / 3;
@@ -365,95 +461,84 @@ fn parse_event_payloads(stream: &mut Stream) -> Option<StreamInfo> {
         event_payload_sizes[command_byte as usize] = payload_size;
     }
 
-    Some(StreamInfo {
+    Ok(StreamInfo {
         event_payload_sizes
     })
 }
 
 pub type SubStream<'a> = Stream<'a>;
 pub struct Stream<'a> {
-    n_read: usize,
     bytes: &'a [u8],
 }
 
 impl<'a> Stream<'a> {
     pub fn new(bytes: &'a [u8]) -> Self {
         Stream {
-            n_read: 0,
             bytes,
         }
-    }
-
-    pub fn bytes_read(&self) -> usize {
-        self.n_read
     }
 
     pub fn as_slice(self) -> &'a [u8] {
         self.bytes
     }
 
-    pub fn take_u8(&mut self) -> Option<u8> {
+    pub fn take_u8(&mut self) -> SlpResult<u8> {
         match self.bytes {
             [b, rest @ ..] => {
                 self.bytes = rest;
-                self.n_read += 1;
-                Some(*b)
+                Ok(*b)
             }
-            _ => None
+            _ => Err(SlpError::InvalidFile)
         }
     }
 
-    pub fn take_bool(&mut self) -> Option<bool> {
+    pub fn take_bool(&mut self) -> SlpResult<bool> {
         let byte = self.take_u8()?;
-        if byte > 1 { return None }
-        Some(unsafe { std::mem::transmute(byte) })
+        if byte > 1 { return Err(SlpError::InvalidFile) }
+        Ok(unsafe { std::mem::transmute(byte) })
     }
 
-    pub fn take_u16(&mut self) -> Option<u16> {
+    pub fn take_u16(&mut self) -> SlpResult<u16> {
         self.take_const_n::<2>()
             .map(|data| u16::from_be_bytes(*data))
     }
 
-    pub fn take_u32(&mut self) -> Option<u32> {
+    pub fn take_u32(&mut self) -> SlpResult<u32> {
         self.take_const_n::<4>()
             .map(|data| u32::from_be_bytes(*data))
     }
 
-    pub fn take_i32(&mut self) -> Option<i32> {
+    pub fn take_i32(&mut self) -> SlpResult<i32> {
         self.take_const_n::<4>()
             .map(|data| i32::from_be_bytes(*data))
     }
 
-    pub fn take_float(&mut self) -> Option<f32> {
+    pub fn take_float(&mut self) -> SlpResult<f32> {
         self.take_const_n::<4>()
             .map(|data| f32::from_be_bytes(*data))
     }
 
-    pub fn take_n(&mut self, n: usize) -> Option<&'a [u8]> {
-        if n > self.bytes.len() { return None }
+    pub fn take_n(&mut self, n: usize) -> SlpResult<&'a [u8]> {
+        if n > self.bytes.len() { return Err(SlpError::InvalidFile) }
 
         let (ret, new_bytes) = self.bytes.split_at(n);
         self.bytes = new_bytes;
-        self.n_read += n;
-        Some(ret)
+        Ok(ret)
     }
 
     /// return size optimization, may not be needed but simple to add
-    pub fn take_const_n<const N: usize>(&mut self) -> Option<&'a [u8; N]> {
-        if N > self.bytes.len() { return None }
+    pub fn take_const_n<const N: usize>(&mut self) -> SlpResult<&'a [u8; N]> {
+        if N > self.bytes.len() { return Err(SlpError::InvalidFile) }
         
         let ret = unsafe { &*(self.bytes.as_ptr() as *const [u8; N]) };
         self.bytes = &self.bytes[N..];
-        self.n_read += N;
-        Some(ret)
+        Ok(ret)
     }
 
     pub fn sub_stream(&mut self, size: usize) -> SubStream<'a> {
         let (sub, new_self) = self.bytes.split_at(size);
         self.bytes = new_self;
-        self.n_read += sub.len();
         Stream {
-            n_read: 0,
             bytes: sub
         }
     }
