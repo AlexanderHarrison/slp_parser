@@ -1597,6 +1597,54 @@ impl SpecialHighLevelAction {
 }
 
 use std::fmt;
+impl fmt::Display for BroadState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BroadState::Standard(s) => write!(f, "{}", s),
+            BroadState::Special(s) => write!(f, "{}", s),
+        }
+    }
+}
+
+impl fmt::Display for StandardBroadState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use StandardBroadState as SBS;
+        match self {
+            SBS::Attack              => write!(f, "Attack"),
+            SBS::Air                 => write!(f, "Air"),
+            SBS::Airdodge            => write!(f, "Airdodge"),
+            SBS::SpecialLanding      => write!(f, "Special land"),
+            SBS::Ground              => write!(f, "Standing"),
+            SBS::Walk                => write!(f, "Walk"),
+            SBS::DashRun             => write!(f, "Dash"),
+            SBS::Shield              => write!(f, "Shield"),
+            SBS::Ledge               => write!(f, "Ledge"),
+            SBS::LedgeAction         => write!(f, "Ledge action"),
+            SBS::Hitstun             => write!(f, "Hitstun"),
+            SBS::GenericInactionable => write!(f, "Inactionable"),
+            SBS::JumpSquat           => write!(f, "Jump squat"),
+            SBS::AirJump             => write!(f, "Air jump"),
+            SBS::Crouch              => write!(f, "Crouch"),
+            SBS::Grab                => write!(f, "Grab"),
+            SBS::Roll                => write!(f, "Roll"),
+            SBS::Spotdodge           => write!(f, "Spotdodge"),
+        }
+    }
+}
+
+impl fmt::Display for SpecialBroadState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use SpecialBroadState as SBS;
+        match self {
+            SBS::Fox(s)           => write!(f, "{}", s),
+            SBS::Falco(s)         => write!(f, "{}", s),
+            SBS::Marth(s)         => write!(f, "{}", s),
+            SBS::Peach(s)         => write!(f, "{}", s),
+            SBS::CaptainFalcon(s) => write!(f, "{}", s),
+        }
+    }
+}
+
 impl fmt::Display for HighLevelAction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use HighLevelAction::*;

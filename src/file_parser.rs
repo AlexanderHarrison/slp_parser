@@ -14,6 +14,8 @@ const FRAME_BOOKEND:        u8 = 0x3C;
 // - remake Stream
 // - fix ambiguous command byte + weird byte offsets
 
+const HEADER_LEN: u64 = 14;
+
 struct StreamInfo {
     pub event_payload_sizes: [u16; 255],  
 }
@@ -33,12 +35,12 @@ impl StreamInfo {
 
 #[derive(Copy, Clone, Debug)]
 struct PreFrameInfo {
-    port_idx: u8,
-    analog_trigger_value: f32,
+    pub port_idx: u8,
+    pub analog_trigger_value: f32,
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct PostFrameInfo {
+struct PostFrameInfo {
     pub character: Character,
     pub port_idx: u8, // zero indexed
     pub direction: Direction,
@@ -48,6 +50,7 @@ pub struct PostFrameInfo {
     pub state: ActionState,
     pub anim_frame: f32,
     pub shield_size: f32,
+    pub stock_count: u8,
 }
 
 fn merge_pre_post_frames(pre: PreFrameInfo, post: PostFrameInfo) -> Frame {
@@ -62,6 +65,7 @@ fn merge_pre_post_frames(pre: PreFrameInfo, post: PostFrameInfo) -> Frame {
         anim_frame: post.anim_frame,   
         shield_size: post.shield_size,
         analog_trigger_value: pre.analog_trigger_value,
+        stock_count: post.stock_count,
     }
 }
 
@@ -86,34 +90,18 @@ pub fn parse_file_info(reader: &mut (impl std::io::Read + std::io::Seek)) -> Slp
     let stream_info = parse_event_payloads(&mut stream)?;
     let game_start_info = parse_game_start(&mut stream, &stream_info)?;
 
-    let header_len: u64 = 14;
-    reader.seek(std::io::SeekFrom::Start(header_len + raw_len as u64))
+    reader.seek(std::io::SeekFrom::Start(HEADER_LEN + raw_len as u64))
         .map_err(|_| SlpError::IOError)?;
     let read_count = reader.read(&mut buf)
         .map_err(|_| SlpError::IOError)?;
 
-    let duration;
-    if let Some(i) = buf[..read_count].windows(9).position(|w| w == b"lastFrame") {
-        duration = u32::from_be_bytes(buf[(i+10)..(i+14)].try_into().unwrap());
-    } else {
-        duration = u32::MAX;
-    }
+    let metadata = parse_metadata(&buf[..read_count]);
 
-    //for b in &buf[..read_count] {
-    //    let b = *b;
-    //    if let Some(c) = char::from_u32(b as u32) {
-    //        if c.is_ascii() {
-    //            print!("{c}");
-    //        } else {
-    //        print!("0x{:x}", b);
-    //        }
-    //    } else {
-    //        print!("0x{:x}", b);
-    //    }
-    //}
-    //    println!();
+    Ok(merge_metadata(game_start_info, metadata))
+}
 
-    Ok(GameInfo {
+fn merge_metadata(game_start_info: GameStartInfo, metadata: u32) -> GameInfo {
+    GameInfo {
         stage: game_start_info.stage,
         low_port_idx: game_start_info.low_port_idx,
         low_starting_character: game_start_info.low_starting_character,
@@ -122,52 +110,34 @@ pub fn parse_file_info(reader: &mut (impl std::io::Read + std::io::Seek)) -> Slp
         start_time: game_start_info.start_time,
         low_name: game_start_info.low_name,
         high_name: game_start_info.high_name,
-        duration,
-    })
+        duration: metadata,
+    }
 }
 
-pub fn parse_detailed_file_info(stream: &mut Stream)-> SlpResult<DetailedGameInfo> {
-    skip_raw_header(stream)?;
-    let stream_info = parse_event_payloads(stream)?;
-    let game_info = parse_game_start(stream, &stream_info)?;
-
-    let mut stocks = [0u32; 4];
-
-    loop {
-        let next_command_byte = stream.take_u8()?;
-        match next_command_byte {
-            POST_FRAME_UPDATE => {
-                let substream = stream_info.create_event_stream(POST_FRAME_UPDATE, stream)?;
-                let bytes = substream.as_slice();
-
-                let stock_count = bytes[0x21];
-                let port = bytes[0x05] & 3; // avoid bounds check for fun
-
-                stocks[port as usize] = stock_count as u32;
-            }
-            GAME_END => { break }
-            _ => stream_info.skip_event(next_command_byte, stream)?,
-        }
+pub fn parse_metadata(bytes: &[u8]) -> u32 {
+    let duration;
+    if let Some(i) = bytes.windows(9).position(|w| w == b"lastFrame") {
+        duration = u32::from_be_bytes(bytes[(i+10)..(i+14)].try_into().unwrap());
+    } else {
+        duration = u32::MAX;
     }
 
-    Ok(DetailedGameInfo {
-        low_end_stock_counts: stocks[game_info.low_port_idx as usize] as u8,
-        high_end_stock_counts: stocks[game_info.high_port_idx as usize] as u8,
-    })
+    duration
 }
 
-
 pub fn parse_file(stream: &mut Stream) -> SlpResult<Game> {
-    skip_raw_header(stream)?;
+    let raw_len = skip_raw_header(stream)?;
+    let metadata_bytes = &stream.as_slice()[raw_len as usize..];
+
     let stream_info = parse_event_payloads(stream)?;
-    let game_info = parse_game_start(stream, &stream_info)?;
+    let game_start_info = parse_game_start(stream, &stream_info)?;
 
     let mut low_port_frames = Vec::new();
     let mut high_port_frames = Vec::new();
 
     let mut port_info: [Option<Port>; 4] = [None; 4];
-    port_info[game_info.low_port_idx as usize] = Some(Port::Low);
-    port_info[game_info.high_port_idx as usize] = Some(Port::High);
+    port_info[game_start_info.low_port_idx as usize] = Some(Port::Low);
+    port_info[game_start_info.high_port_idx as usize] = Some(Port::High);
 
     let mut items = Vec::new();
     let mut item_idx = vec![0];
@@ -233,12 +203,14 @@ pub fn parse_file(stream: &mut Stream) -> SlpResult<Game> {
         }
     }
 
+    let metadata = parse_metadata(metadata_bytes);
+
     Ok(Game {
         high_port_frames: high_port_frames.into_boxed_slice(), 
         low_port_frames: low_port_frames.into_boxed_slice(),
         item_idx: item_idx.into_boxed_slice(),
         items: items.into_boxed_slice(),
-        info: game_info,
+        info: merge_metadata(game_start_info, metadata),
     })
 }
 
@@ -439,6 +411,7 @@ fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Po
     let state = ActionState::from_u16(state_u16, character)
         .ok_or(SlpError::InvalidFile)?;
     let shield_size = f32::from_be_bytes(bytes[0x19..0x1D].try_into().unwrap());
+    let stock_count = bytes[0x20];
     let anim_frame = f32::from_be_bytes(bytes[0x21..0x25].try_into().unwrap());
 
     Ok(PostFrameInfo {
@@ -451,6 +424,7 @@ fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Po
         state,
         anim_frame,
         shield_size,
+        stock_count,
     })
 }
 
@@ -473,6 +447,8 @@ fn parse_event_payloads(stream: &mut Stream) -> SlpResult<StreamInfo> {
 }
 
 pub type SubStream<'a> = Stream<'a>;
+
+#[derive(Copy, Clone)]
 pub struct Stream<'a> {
     bytes: &'a [u8],
 }

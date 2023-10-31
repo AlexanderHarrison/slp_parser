@@ -53,6 +53,7 @@ pub struct Frame {
     pub anim_frame: f32,
     pub shield_size: f32,
     pub analog_trigger_value: f32,
+    pub stock_count: u8,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -68,14 +69,8 @@ pub struct Item {
     pub owner: i8,
 }
 
-// requires parsing entire game rather than just game start + metadata
-#[derive(Copy, Clone, Debug)]
-pub struct DetailedGameInfo {
-    pub low_end_stock_counts: u8,
-    pub high_end_stock_counts: u8,
-}
-
-#[derive(Copy, Clone, Debug)]
+// requires parsing metadata
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct GameInfo {
     pub stage: Stage,
     pub low_port_idx: u8,
@@ -113,7 +108,7 @@ pub struct Game {
     /// get item_range with `item_idx[frame]..item_idx[frame+1]`
     pub item_idx: Box<[u16]>,
     pub items: Box<[Item]>,
-    pub info: GameStartInfo,
+    pub info: GameInfo,
 } 
 
 impl Game {
@@ -156,43 +151,9 @@ pub fn read_info_in_dir(path: impl AsRef<std::path::Path>) -> SlpResult<impl Ite
         }))
 }
 
-pub fn read_detailed_info_in_dir(path: impl AsRef<std::path::Path>) 
-    -> SlpResult<impl Iterator<Item=(Box<std::path::Path>, DetailedGameInfo)>> 
-{
-    Ok(std::fs::read_dir(path)
-        .map_err(|_| SlpError::IOError)?
-        .filter_map(|entry| {
-            if let Ok(entry) = entry {
-                if let Ok(ftype) = entry.file_type() {
-                    if ftype.is_file() {
-                        let path = entry.path();
-                        if path.extension() == Some(std::ffi::OsStr::new("slp")) {
-                            if let Ok(info) = read_detailed_info(&path) {
-                                return Some((path.into_boxed_path(), info))
-                            }
-                        }
-                    }
-                }
-            }
-            None
-        }))
-}
-
-
 pub fn read_info(path: &std::path::Path) -> SlpResult<GameInfo> {
     let mut file = std::fs::File::open(path).map_err(|_| SlpError::FileDoesNotExist)?;
     let info = file_parser::parse_file_info(&mut file)?;
-    Ok(info)
-}
-
-pub fn read_detailed_info(path: &std::path::Path) -> SlpResult<DetailedGameInfo> {
-    use std::io::Read;
-
-    let mut file = std::fs::File::open(path).map_err(|_| SlpError::FileDoesNotExist)?;
-    let mut buf = Vec::new();
-    file.read_to_end(&mut buf).unwrap();
-
-    let info = file_parser::parse_detailed_file_info(&mut file_parser::Stream::new(&buf))?;
     Ok(info)
 }
 
@@ -268,9 +229,7 @@ pub fn generate_interactions<'a>(mut player_actions: &'a [Action], mut opponent_
 use std::fmt;
 impl fmt::Display for Action {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let prev = format!("{:?}", self.start_state);
-        let s = format!("{}", self.action_taken);
-        write!(f, "{:10}: {:15}{} -> {}", prev, s, self.frame_start, self.frame_end)
+        write!(f, "{:10}: {:15} {} -> {}", self.start_state, self.action_taken, self.frame_start, self.frame_end)
     }
 }
 

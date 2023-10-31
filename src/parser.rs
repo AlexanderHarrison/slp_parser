@@ -1,6 +1,7 @@
 use crate::*;
 
 pub fn parse(frames: &[Frame]) -> Vec<crate::Action> {
+    println!("parse");
     let mut actions = Vec::new();
     let mut consumer = ActionBuilder::new(frames);
     while !consumer.finished() {
@@ -134,7 +135,6 @@ impl Action {
                 Action::parse_simple_action(consumer, Spotdodge.into(), HighLevelAction::Spotdodge)
             }
         }
-
     }
 
     fn parse_roll(consumer: &mut ActionBuilder) -> Result<Action, ParseError> {

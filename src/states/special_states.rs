@@ -104,6 +104,26 @@ macro_rules! special_states {
                 Ok(consumer.finish_action(hla))
 
             }
+
+            pub fn as_string(&self) -> &'static str {
+                use $sbs::*;
+                match self {
+                    $($bsnm => stringify!($bsnm),)*
+                }
+            }
+        }
+
+        impl $shla {
+            #[allow(unused, non_snake_case)]
+            pub const VARIANT_COUNT: usize = $( {let $bsnm: u8; 1} + )* $( $( {let $jparam: u8; 1} + )* )* 0;
+
+            pub fn as_string(&self) -> &'static str {
+                use $shla::*;
+                match self {
+                    $($bsnm => stringify!($bsnm),)*
+                    $( $($jparam => stringify!($bsnm),)* )*
+                }
+            }
         }
 
         impl Into<HighLevelAction> for $shla {
@@ -126,13 +146,14 @@ macro_rules! special_states {
 
         impl fmt::Display for $shla {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                write!(f, "{}", self.to_string())
+                write!(f, "{}", self.as_string())
             }
         }
 
-        impl $shla {
-            #[allow(unused, non_snake_case)]
-            const VARIANT_COUNT: usize = $( {let $bsnm: u8; 1} + )* $( $( {let $jparam: u8; 1} + )* )* 0;
+        impl fmt::Display for $sbs {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "{}", self.as_string())
+            }
         }
     }
 }
