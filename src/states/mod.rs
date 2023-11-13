@@ -1,7 +1,7 @@
 mod special_states;
 pub use special_states::*;
 
-use crate::Character;
+use crate::{SlpResult, SlpError, Character};
 
 // It is very useful to abstract away special moves from standard moves, 
 // since they need to be parsed separatately and differently per character.
@@ -113,13 +113,12 @@ impl ActionState {
         }
     }
 
-    pub fn from_u16(n: u16, character: Character) -> Option<Self> {
-        if let Some(state) = StandardActionState::from_u16(n) {
-            Some(ActionState::Standard(state))
-        } else if let Some(state) = SpecialActionState::from_u16(n, character) {
-            Some(ActionState::Special(state))
+    pub fn from_u16(n: u16, character: Character) -> SlpResult<Self> {
+        if let Ok(state) = StandardActionState::from_u16(n) {
+            Ok(ActionState::Standard(state))
         } else {
-            None
+            let state = SpecialActionState::from_u16(n, character)?;
+            Ok(ActionState::Special(state))
         }
     }
 
@@ -241,13 +240,13 @@ impl Into<HighLevelAction> for SpecialHighLevelAction {
 
 
 impl StandardActionState {
-    pub fn from_u16(st: u16) -> Option<Self> {
+    pub fn from_u16(st: u16) -> SlpResult<Self> {
         if st <= 340 {
-            Some(unsafe { std::mem::transmute(st) })
+            Ok(unsafe { std::mem::transmute(st) })
         } else {
             //eprintln!("unknown state id: {}", st);
             //StandardActionState::Passive // TODO:
-            None
+            Err(SlpError::InvalidFile)
         }
     }
 
@@ -1026,17 +1025,14 @@ impl SpecialActionState {
         }
     }
 
-    pub fn from_u16(n: u16, character: Character) -> Option<Self> {
-        Some(match character {
+    pub fn from_u16(n: u16, character: Character) -> SlpResult<Self> {
+        Ok(match character {
             Character::Fox => SpecialActionState::Fox(FoxSpecialActionState::from_u16(n)?),
             Character::Falco => SpecialActionState::Falco(FalcoSpecialActionState::from_u16(n)?),
             Character::Marth => SpecialActionState::Marth(MarthSpecialActionState::from_u16(n)?),
             Character::Peach => SpecialActionState::Peach(PeachSpecialActionState::from_u16(n)?),
             Character::CaptainFalcon => SpecialActionState::CaptainFalcon(CaptainFalconSpecialActionState::from_u16(n)?),
-            _ => {
-                println!("{n}, {character:?}");
-                todo!()
-            }
+            _ => return Err(SlpError::UnimplementedCharacter(character)),
         })
     }
 

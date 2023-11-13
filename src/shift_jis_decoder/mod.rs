@@ -26,7 +26,7 @@
 
 mod shift_jis_1997;
 
-/// Adapted from picori: https://github.com/Julgodis/picori
+/// Adapted from picori: <https://github.com/Julgodis/picori>
 ///
 /// Returns number of bytes written.
 /// Stops decoding on null byte.

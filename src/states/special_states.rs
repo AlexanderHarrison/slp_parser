@@ -1,4 +1,5 @@
-use crate::{Action, BroadState, SpecialBroadState, ActionState, SpecialActionState, SpecialHighLevelAction};
+use crate::{Action, BroadState, SpecialBroadState, ActionState, SpecialActionState, 
+    SpecialHighLevelAction, SlpError, SlpResult, Character};
 use crate::parser::{JumpType, ParseError, ActionBuilder};
 use crate::states::HighLevelAction;
 use std::fmt;
@@ -8,6 +9,17 @@ use std::fmt;
 // copy action state names and indicies
 // fill out action state and hla enum names
 // fill out anim map in arwing
+
+pub fn implemented_character(c: Character) -> bool {
+    match c {
+        Character::Fox
+        | Character::Falco
+        | Character::Marth
+        | Character::Peach
+        | Character::CaptainFalcon => true,
+        _ => false,
+    }
+}
 
 macro_rules! parse_fn {
     ($char:ident, $sbs:ident, $shla:ident, $bsnm:ident, $consumer:ident, ParseAll) => {{
@@ -57,10 +69,10 @@ macro_rules! special_states {
         }
 
         impl $sas {
-            pub fn from_u16(n: u16) -> Option<Self> {
+            pub fn from_u16(n: u16) -> SlpResult<Self> {
                 match n {
-                    $($n => Some($sas::$nm),)*
-                    _ => None
+                    $($n => Ok($sas::$nm),)*
+                    _ => Err(SlpError::InvalidFile)
                 }
             }
 

@@ -14,6 +14,9 @@ const FRAME_BOOKEND:        u8 = 0x3C;
 // - remake Stream
 // - fix ambiguous command byte + weird byte offsets
 
+pub const MIN_VERSION_MAJOR: u8 = 3;
+pub const MIN_VERSION_MINOR: u8 = 13;
+
 const HEADER_LEN: u64 = 14;
 
 struct StreamInfo {
@@ -100,21 +103,35 @@ pub fn parse_file_info(reader: &mut (impl std::io::Read + std::io::Seek)) -> Slp
     Ok(merge_metadata(game_start_info, metadata))
 }
 
-fn merge_metadata(game_start_info: GameStartInfo, metadata: u32) -> GameInfo {
+fn merge_metadata(game_start_info: GameStartInfo, metadata: Metadata) -> GameInfo {
     GameInfo {
         stage: game_start_info.stage,
         low_port_idx: game_start_info.low_port_idx,
         low_starting_character: game_start_info.low_starting_character,
         high_port_idx: game_start_info.high_port_idx,
         high_starting_character: game_start_info.high_starting_character,
-        start_time: game_start_info.start_time,
+        start_time: metadata.time,
         low_name: game_start_info.low_name,
         high_name: game_start_info.high_name,
-        duration: metadata,
+        low_connect_code: game_start_info.low_connect_code,
+        high_connect_code: game_start_info.high_connect_code,
+        duration: metadata.duration,
     }
 }
 
-pub fn parse_metadata(bytes: &[u8]) -> u32 {
+struct Metadata {
+    pub duration: u32,
+    pub time: Time,
+}
+
+fn parse_metadata(bytes: &[u8]) -> Metadata {
+    let time;
+    if let Some(i) = bytes.windows(7).position(|w| w == b"startAt") {
+        time = parse_timestamp(&bytes[i+10..i+30]).unwrap_or(Time::NULL);
+    } else {
+        time = Time::NULL;
+    }
+
     let duration;
     if let Some(i) = bytes.windows(9).position(|w| w == b"lastFrame") {
         duration = u32::from_be_bytes(bytes[(i+10)..(i+14)].try_into().unwrap());
@@ -122,7 +139,10 @@ pub fn parse_metadata(bytes: &[u8]) -> u32 {
         duration = u32::MAX;
     }
 
-    duration
+    Metadata {
+        duration,
+        time
+    }
 }
 
 pub fn parse_file(stream: &mut Stream) -> SlpResult<Game> {
@@ -233,7 +253,9 @@ fn parse_game_start(stream: &mut Stream, info: &StreamInfo) -> SlpResult<GameSta
     let bytes = substream.as_slice();
 
     // requires version >= 3.14.0
-    if bytes[0] <= 3 && bytes[1] < 14 {
+    if bytes[0] < MIN_VERSION_MAJOR || 
+        (bytes[0] == MIN_VERSION_MAJOR && bytes[1] < MIN_VERSION_MINOR) 
+    {
         return Err(SlpError::OutdatedFile)
     }
 
@@ -267,12 +289,16 @@ fn parse_game_start(stream: &mut Stream, info: &StreamInfo) -> SlpResult<GameSta
 
     let low_name_offset = 0x1A5 + 0x1F * low_port_idx as usize - 1;
     let low_name = bytes[low_name_offset..low_name_offset+32].try_into().unwrap();
-
     let high_name_offset = 0x1A5 + 0x1F * high_port_idx as usize - 1;
     let high_name = bytes[high_name_offset..high_name_offset+32].try_into().unwrap();
 
-    let match_id = &bytes[(0x04 + 0x2BE)..(0x04 + 0x2BE + 51)];
-    let start_time = parse_match_id(match_id)?;
+    let low_code_offset = 0x221 + 0x0A * low_port_idx as usize - 1;
+    let low_connect_code = bytes[low_code_offset..low_code_offset+10].try_into().unwrap();
+    let high_code_offset = 0x221 + 0x0A * high_port_idx as usize - 1;
+    let high_connect_code = bytes[high_code_offset..high_code_offset+10].try_into().unwrap();
+
+    //let timestamp = &bytes[(0x04 + 0x2BE)..(0x04 + 0x2BE + 51)];
+    //let start_time = parse_timestamp(timestamp)?;
 
     Ok(GameStartInfo {
         stage, 
@@ -280,49 +306,39 @@ fn parse_game_start(stream: &mut Stream, info: &StreamInfo) -> SlpResult<GameSta
         low_starting_character,
         high_port_idx,
         high_starting_character,
-        start_time,
         low_name,
         high_name,
+        low_connect_code,
+        high_connect_code,
     })
 }
 
-fn parse_match_id(match_id: &[u8]) -> SlpResult<Time> {
-    // unranked-2023-10-04T03:43:00.64-0
+fn parse_timestamp(timestamp: &[u8]) -> SlpResult<Time> {
+    // 2023-10-04T03:43:00.64-0
+    // 2018-06-22T07:52:59Z
   
     #[inline(always)]
     const fn conv(n: u8) -> u8 { n - b'0' }
 
-    let mut i = 0;
-    loop {
-        let b = match_id[i];
-        if b == b'-' { break }
-        if b == 0 { return Err(SlpError::InvalidFile) }
-        i += 1;
-    }
+    if timestamp.len() < 19 { return Err(SlpError::InvalidFile) }
 
-    if match_id[i..].len() < 23 { return Err(SlpError::InvalidFile) }
-
-    i += 1;
-
-    let d1 = conv(match_id[i]  ) as u16;
-    let d2 = conv(match_id[i+1]) as u16;
-    let d3 = conv(match_id[i+2]) as u16;
-    let d4 = conv(match_id[i+3]) as u16;
+    let d1 = conv(timestamp[0]  ) as u16;
+    let d2 = conv(timestamp[1]) as u16;
+    let d3 = conv(timestamp[2]) as u16;
+    let d4 = conv(timestamp[3]) as u16;
     let year = d1 * 1000 + d2 * 100 + d3 * 10 + d4;
-    let month = conv(match_id[i+5]) * 10 + conv(match_id[i+6]);
-    let day = conv(match_id[i+8]) * 10 + conv(match_id[i+9]);
-    let hour = conv(match_id[i+11]) * 10 + conv(match_id[i+12]);
-    let minute = conv(match_id[i+14]) * 10 + conv(match_id[i+15]);
-    let second = conv(match_id[i+17]) * 10 + conv(match_id[i+18]);
-    let msec = conv(match_id[i+20]) * 10 + conv(match_id[i+21]);
+    let month = conv(timestamp[5]) * 10 + conv(timestamp[6]);
+    let day = conv(timestamp[8]) * 10 + conv(timestamp[9]);
+    let hour = conv(timestamp[11]) * 10 + conv(timestamp[12]);
+    let minute = conv(timestamp[14]) * 10 + conv(timestamp[15]);
+    let second = conv(timestamp[17]) * 10 + conv(timestamp[18]);
 
     let time = ((year as u64) << 48)
         | ((month as u64) << 40)
         | ((day as u64) << 32)
         | ((hour as u64) << 24)
         | ((minute as u64) << 16)
-        | ((second as u64) << 8)
-        | msec as u64;
+        | ((second as u64) << 8);
 
     Ok(Time(time))
 }
@@ -392,6 +408,10 @@ fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Po
     let character = Character::from_u8_internal(bytes[0x6])
         .ok_or(SlpError::InvalidFile)?;
 
+    if !implemented_character(character) {
+        return Err(SlpError::UnimplementedCharacter(character));
+    }
+
     let direction_f = f32::from_be_bytes(bytes[0x11..0x15].try_into().unwrap());
     let direction = if direction_f == 1.0 { Direction::Right } else { Direction::Left };
 
@@ -408,8 +428,7 @@ fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Po
         y: f32::from_be_bytes(bytes[0xD..0x11].try_into().unwrap()),
     };
     let state_u16 = u16::from_be_bytes(bytes[0x7..0x9].try_into().unwrap());
-    let state = ActionState::from_u16(state_u16, character)
-        .ok_or(SlpError::InvalidFile)?;
+    let state = ActionState::from_u16(state_u16, character)?;
     let shield_size = f32::from_be_bytes(bytes[0x19..0x1D].try_into().unwrap());
     let stock_count = bytes[0x20];
     let anim_frame = f32::from_be_bytes(bytes[0x21..0x25].try_into().unwrap());

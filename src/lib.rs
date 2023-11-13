@@ -20,6 +20,7 @@ pub enum SlpError {
     OutdatedFile,
     InvalidFile,
     NotTwoPlayers,
+    UnimplementedCharacter(Character),
 
     FileDoesNotExist,
     IOError,
@@ -83,6 +84,10 @@ pub struct GameInfo {
     // null terminated Shift JIS strings. zero length if does not exist
     pub low_name: [u8; 32],
     pub high_name: [u8; 32],
+
+    // null terminated Shift JIS strings. zero length if does not exist
+    pub low_connect_code: [u8; 10],
+    pub high_connect_code: [u8; 10],
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -92,11 +97,14 @@ pub struct GameStartInfo {
     pub low_starting_character: CharacterColour,
     pub high_port_idx: u8,
     pub high_starting_character: CharacterColour,
-    pub start_time: Time,
 
     // null terminated Shift JIS strings. zero length if does not exist
     pub low_name: [u8; 32],
     pub high_name: [u8; 32],
+
+    // null terminated Shift JIS strings. zero length if does not exist
+    pub low_connect_code: [u8; 10],
+    pub high_connect_code: [u8; 10],
 }
 
 #[derive(Debug)]
@@ -233,6 +241,25 @@ impl fmt::Display for Action {
     }
 }
 
+impl fmt::Display for SlpError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", match self {
+            SlpError::OutdatedFile => format!(
+                "Outdated file. A version >= {}.{}.0 is required.",
+                MIN_VERSION_MAJOR,
+                MIN_VERSION_MINOR,
+            ),
+            SlpError::InvalidFile => "Invalid file.".to_owned(),
+            SlpError::NotTwoPlayers => "File must be a two player match.".to_owned(),
+            SlpError::UnimplementedCharacter(c) => format!(
+                "Character ({c}) is not yet implemented.",
+            ),
+            SlpError::FileDoesNotExist => "File does not exist.".to_owned(),
+            SlpError::IOError => "Error reading file.".to_owned(),
+        })
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Vector {
     pub x: f32,
@@ -245,8 +272,10 @@ pub enum Direction {
     Right
 }
 
+// zero if invalid time
 #[derive(Copy, Clone, Debug, PartialOrd, Ord, Eq, PartialEq)]
 pub struct Time(u64);
+impl Time { pub const NULL: Time = Time(0); }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct TimeFields {
@@ -256,9 +285,6 @@ pub struct TimeFields {
     pub hour: u8,
     pub minute: u8,
     pub second: u8,
-
-    /// 0 -> 99
-    pub millisecond: u8,
 }
 
 impl Time {
@@ -271,7 +297,6 @@ impl Time {
             hour: (t >> 24) as u8,
             minute: (t >> 16) as u8,
             second: (t >> 8) as u8,
-            millisecond: t as u8,
         }
     }
 }
@@ -283,8 +308,7 @@ impl From<TimeFields> for Time {
             | ((fields.day as u64) << 32)
             | ((fields.hour as u64) << 24)
             | ((fields.minute as u64) << 16)
-            | ((fields.second as u64) << 8)
-            | fields.millisecond as u64;
+            | ((fields.second as u64) << 8);
 
         Time(time)
     }
