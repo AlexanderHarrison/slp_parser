@@ -1011,6 +1011,7 @@ impl SpecialActionState {
             SpecialActionState::Marth(s) => SpecialBroadState::Marth(s.broad_state()),
             SpecialActionState::Peach(s) => SpecialBroadState::Peach(s.broad_state()),
             SpecialActionState::CaptainFalcon(s) => SpecialBroadState::CaptainFalcon(s.broad_state()),
+            SpecialActionState::Sheik(s) => SpecialBroadState::Sheik(s.broad_state()),
         }
     }
 
@@ -1022,6 +1023,7 @@ impl SpecialActionState {
             SpecialActionState::Marth(f) => f.internal_name(),
             SpecialActionState::Peach(f) => f.internal_name(),
             SpecialActionState::CaptainFalcon(f) => f.internal_name(),
+            SpecialActionState::Sheik(f) => f.internal_name(),
         }
     }
 
@@ -1032,6 +1034,7 @@ impl SpecialActionState {
             Character::Marth => SpecialActionState::Marth(MarthSpecialActionState::from_u16(n)?),
             Character::Peach => SpecialActionState::Peach(PeachSpecialActionState::from_u16(n)?),
             Character::CaptainFalcon => SpecialActionState::CaptainFalcon(CaptainFalconSpecialActionState::from_u16(n)?),
+            Character::Sheik => SpecialActionState::Sheik(SheikSpecialActionState::from_u16(n)?),
             _ => return Err(SlpError::UnimplementedCharacter(character)),
         })
     }
@@ -1052,6 +1055,7 @@ pub enum SpecialActionState {
     Marth(MarthSpecialActionState),
     Peach(PeachSpecialActionState),
     CaptainFalcon(CaptainFalconSpecialActionState),
+    Sheik(SheikSpecialActionState),
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -1061,6 +1065,7 @@ pub enum SpecialBroadState {
     Marth(MarthSpecialBroadState),
     Peach(PeachSpecialBroadState),
     CaptainFalcon(CaptainFalconSpecialBroadState),
+    Sheik(SheikSpecialBroadState),
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -1070,6 +1075,7 @@ pub enum SpecialHighLevelAction {
     Marth(MarthHighLevelAction),
     Peach(PeachHighLevelAction),
     CaptainFalcon(CaptainFalconHighLevelAction),
+    Sheik(SheikHighLevelAction),
 }
 
 #[derive(Copy, Clone, Debug, PartialOrd, Ord, PartialEq, Eq, Hash)]
@@ -1637,6 +1643,7 @@ impl fmt::Display for SpecialBroadState {
             SBS::Marth(s)         => write!(f, "{}", s),
             SBS::Peach(s)         => write!(f, "{}", s),
             SBS::CaptainFalcon(s) => write!(f, "{}", s),
+            SBS::Sheik(s)         => write!(f, "{}", s),
         }
     }
 }
@@ -1697,6 +1704,7 @@ impl fmt::Display for SpecialHighLevelAction {
             Marth(ch) => write!(f, "{}", ch),
             Peach(ch) => write!(f, "{}", ch),
             CaptainFalcon(ch) => write!(f, "{}", ch),
+            Sheik(ch) => write!(f, "{}", ch),
         }
     }
 }

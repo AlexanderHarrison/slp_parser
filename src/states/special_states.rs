@@ -16,6 +16,7 @@ pub fn implemented_character(c: Character) -> bool {
         | Character::Falco
         | Character::Marth
         | Character::Peach
+        | Character::Sheik
         | Character::CaptainFalcon => true,
         _ => false,
     }
@@ -383,5 +384,43 @@ special_states! {
         FalconKickAirEndingInAir        = 361 => FalconKick , "SpecialAirLwEndAir",
         FalconKickGroundEndingInAir     = 362 => FalconKick , "SpecialLwEnd",
         FalconKickHitWall               = 363 => FalconKick , "SpecialLwEnd", // idk
+    }
+}
+
+special_states! {
+    Sheik, SheikSpecialActionState, 
+    SheikSpecialBroadState, SheikHighLevelAction
+    {
+        ChargeNeedles, ParseAll, NoJumpVariants(),
+        ReleaseNeedles, ParseAll, NoJumpVariants(),
+        Chain, ParseAll, NoJumpVariants(),
+        Vanish, ParseAll, NoJumpVariants(),
+        Transform, ParseAll, NoJumpVariants(),
+    },
+    {
+        NeedleStormGroundStartCharge = 341 => ChargeNeedles,  "SpecialNStart",
+        NeedleStormGroundChargeLoop  = 342 => ChargeNeedles,  "SpecialNLoop",
+        NeedleStormGroundEndCharge   = 343 => ChargeNeedles,  "SpecialNCancel",
+        NeedleStormGroundFire        = 344 => ReleaseNeedles, "SpecialNEnd",
+        NeedleStormAirStartCharge    = 345 => ChargeNeedles,  "SpecialAirNStart",
+        NeedleStormAirChargeLoop     = 346 => ChargeNeedles,  "SpecialAirNLoop",
+        NeedleStormAirEndCharge      = 347 => ChargeNeedles,  "SpecialAirNCancel",
+        NeedleStormAirFire           = 348 => ReleaseNeedles, "SpecialAirNEnd",
+        ChainGroundStartup           = 349 => Chain,          "SpecialSStart",
+        ChainGroundLoop              = 350 => Chain,          "SpecialS",
+        ChainGroundEnd               = 351 => Chain,          "SpecialSEnd",
+        ChainAirStartup              = 352 => Chain,          "SpecialAirSStart",
+        ChainAirLoop                 = 353 => Chain,          "SpecialAirS",
+        ChainAirEnd                  = 354 => Chain,          "SpecialAirSEnd",
+        VanishGroundStartup          = 355 => Vanish,         "SpecialHiStart",
+        VanishGroundDisappear        = 356 => Vanish,         "SpecialHi", // ????????
+        VanishGroundReappear         = 357 => Vanish,         "SpecialHi", // ????????
+        VanishAirStartup             = 358 => Vanish,         "SpecialAirHiStart",
+        VanishAirDisappear           = 359 => Vanish,         "SpecialAirHi", // ????????
+        VanishAirReappear            = 360 => Vanish,         "SpecialAirHi", // ????????
+        TransformGround              = 361 => Transform,      "SpecialLw",
+        TransformGroundEnding        = 362 => Transform,      "SpecialLw2", // ?????
+        TransformAir                 = 363 => Transform,      "SpecialAirLw",
+        TransformAirEnding           = 364 => Transform,      "SpecialAirLw2", // ?????
     }
 }

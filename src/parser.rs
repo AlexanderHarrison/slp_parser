@@ -101,6 +101,7 @@ impl Action {
             Marth(state) => state.parse_special(consumer),
             Peach(state) => state.parse_special(consumer),
             CaptainFalcon(state) => state.parse_special(consumer),
+            Sheik(state) => state.parse_special(consumer),
         }
     }
 
@@ -409,6 +410,7 @@ impl Action {
             Marth(state) => state.parse_jumping_special(consumer, jump_type),
             Peach(state) => state.parse_jumping_special(consumer, jump_type),
             CaptainFalcon(state) => state.parse_jumping_special(consumer, jump_type),
+            Sheik(state) => state.parse_jumping_special(consumer, jump_type),
         }
     }
 
