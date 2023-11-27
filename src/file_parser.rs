@@ -54,6 +54,7 @@ struct PostFrameInfo {
     pub anim_frame: f32,
     pub shield_size: f32,
     pub stock_count: u8,
+    pub percent: f32,
 }
 
 fn merge_pre_post_frames(pre: PreFrameInfo, post: PostFrameInfo) -> Frame {
@@ -69,6 +70,7 @@ fn merge_pre_post_frames(pre: PreFrameInfo, post: PostFrameInfo) -> Frame {
         shield_size: post.shield_size,
         analog_trigger_value: pre.analog_trigger_value,
         stock_count: post.stock_count,
+        percent: post.percent,
     }
 }
 
@@ -429,6 +431,7 @@ fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Po
     };
     let state_u16 = u16::from_be_bytes(bytes[0x7..0x9].try_into().unwrap());
     let state = ActionState::from_u16(state_u16, character)?;
+    let percent = f32::from_be_bytes(bytes[0x15..0x19].try_into().unwrap());
     let shield_size = f32::from_be_bytes(bytes[0x19..0x1D].try_into().unwrap());
     let stock_count = bytes[0x20];
     let anim_frame = f32::from_be_bytes(bytes[0x21..0x25].try_into().unwrap());
@@ -444,6 +447,7 @@ fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Po
         anim_frame,
         shield_size,
         stock_count,
+        percent,
     })
 }
 

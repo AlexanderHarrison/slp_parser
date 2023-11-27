@@ -54,6 +54,7 @@ pub struct Frame {
     pub anim_frame: f32,
     pub shield_size: f32,
     pub analog_trigger_value: f32,
+    pub percent: f32,
     pub stock_count: u8,
 }
 
