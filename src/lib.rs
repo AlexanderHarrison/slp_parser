@@ -13,6 +13,8 @@ pub use game_enums::*;
 mod shift_jis_decoder;
 pub use shift_jis_decoder::*;
 
+use std::path::Path;
+
 pub type SlpResult<T> = Result<T, SlpError>;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -58,7 +60,7 @@ pub struct Frame {
     pub stock_count: u8,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Item {
     pub type_id: u16,
     pub state: u8,
@@ -108,12 +110,11 @@ pub struct GameStartInfo {
     pub high_connect_code: [u8; 10],
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Game {
     pub low_port_frames: Box<[Frame]>,
     pub high_port_frames: Box<[Frame]>,
 
-    /// one for each frame, and one more.
     /// get item_range with `item_idx[frame]..item_idx[frame+1]`
     pub item_idx: Box<[u16]>,
     pub items: Box<[Item]>,
@@ -140,33 +141,111 @@ pub struct Interaction {
     pub player_response: Action,
 }
 
-pub fn read_info_in_dir(path: impl AsRef<std::path::Path>) -> SlpResult<impl Iterator<Item=(Box<std::path::Path>, GameInfo)>> {
-    Ok(std::fs::read_dir(path)
-        .map_err(|_| SlpError::IOError)?
-        .filter_map(|entry| {
-            if let Ok(entry) = entry {
-                if let Ok(ftype) = entry.file_type() {
-                    if ftype.is_file() {
-                        let path = entry.path();
-                        if path.extension() == Some(std::ffi::OsStr::new("slp")) {
-                            if let Ok(info) = read_info(&path) {
-                                return Some((path.into_boxed_path(), info))
-                            }
-                        }
-                    }
-                }
-            }
-            None
-        }))
+#[derive(Clone, Debug)]
+pub struct SlpFileInfo {
+    pub path: Box<Path>,
+    pub info: GameInfo,
 }
 
-pub fn read_info(path: &std::path::Path) -> SlpResult<GameInfo> {
+#[derive(Clone, Debug)]
+pub struct Folder {
+    pub path: Box<Path>,
+    //pub slp_count: u32,
+    //pub folder_count: u32,
+}
+    
+#[derive(Clone, Debug)]
+pub struct SlpDirectoryInfo {
+    pub slp_files: Box<[SlpFileInfo]>,
+    pub folders: Box<[Folder]>
+}
+
+#[derive(Copy, Clone, Debug)]
+enum SlpDirEntryType {
+    SlpFile,
+    Directory,
+    Other,
+}
+
+fn entry_type(entry: &std::fs::DirEntry) -> SlpResult<SlpDirEntryType> {
+    let file_type = entry.file_type().map_err(|_| SlpError::IOError)?;
+    if file_type.is_file() {
+        let path = entry.path();
+        if path.extension() == Some(std::ffi::OsStr::new("slp")) {
+            Ok(SlpDirEntryType::SlpFile)
+        } else {
+            Ok(SlpDirEntryType::Other)
+        }
+    } else if file_type.is_dir() {
+        Ok(SlpDirEntryType::Directory)
+    } else {
+        Ok(SlpDirEntryType::Other)
+    }
+}
+
+// files and folders not returned in any particular order
+pub fn read_info_in_dir(
+    path: impl AsRef<Path>,
+) -> SlpResult<SlpDirectoryInfo> {
+    let mut slp_files = Vec::with_capacity(128);
+    let mut folders = Vec::with_capacity(16);
+
+    for entry in std::fs::read_dir(path).map_err(|_| SlpError::IOError)? {
+        let entry = entry.map_err(|_| SlpError::IOError)?;
+        match entry_type(&entry)? {
+            SlpDirEntryType::SlpFile => {
+                let game_path = entry.path();
+                let info = match read_info(&game_path) {
+                    Ok(info) => info,
+                    Err(e) => {
+                        eprintln!("error {e} reading file info, skipped {}", game_path.display());
+                        continue;
+                    }
+                };
+
+                slp_files.push(SlpFileInfo {
+                    path: game_path.into_boxed_path(),
+                    info,
+                });
+            }
+            SlpDirEntryType::Directory => {
+                let folder_path = entry.path();
+
+                //let mut folder_count = 0;
+                //let mut slp_count = 0;
+
+                //for sub_entry in std::fs::read_dir(&folder_path).map_err(|_| SlpError::IOError)? {
+                //    let sub_entry = sub_entry.map_err(|_| SlpError::IOError)?;
+                //    match entry_type(&sub_entry)? {
+                //        SlpDirEntryType::SlpFile => slp_count += 1,
+                //        SlpDirEntryType::Directory => folder_count += 1,
+                //        _ => (),
+                //    }
+                //}
+
+                folders.push(Folder {
+                    path: folder_path.into_boxed_path(),
+                    //folder_count,
+                    //slp_count,
+                });
+            }
+            _ => (),
+        }
+    }
+
+    Ok(SlpDirectoryInfo {
+        slp_files: slp_files.into_boxed_slice(),
+        folders: folders.into_boxed_slice(),
+    })
+}
+
+pub fn read_info(path: &Path) -> SlpResult<GameInfo> {
     let mut file = std::fs::File::open(path).map_err(|_| SlpError::FileDoesNotExist)?;
     let info = file_parser::parse_file_info(&mut file)?;
     Ok(info)
 }
 
-pub fn read_game(path: &std::path::Path) -> SlpResult<Game> {
+pub fn read_game(path: &Path) -> SlpResult<Game> {
     use std::io::Read;
 
     let mut file = std::fs::File::open(path).map_err(|_| SlpError::FileDoesNotExist)?;
@@ -177,7 +256,7 @@ pub fn read_game(path: &std::path::Path) -> SlpResult<Game> {
     Ok(game)
 }
 
-pub fn parse_game(game: &std::path::Path, port: Port) -> SlpResult<Box<[Action]>> {
+pub fn parse_game(game: &Path, port: Port) -> SlpResult<Box<[Action]>> {
     use std::io::Read;
 
     let mut file = std::fs::File::open(game).map_err(|_| SlpError::FileDoesNotExist)?;
