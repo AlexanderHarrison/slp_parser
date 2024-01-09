@@ -157,7 +157,8 @@ pub struct Folder {
 #[derive(Clone, Debug)]
 pub struct SlpDirectoryInfo {
     pub slp_files: Box<[SlpFileInfo]>,
-    pub folders: Box<[Folder]>
+    pub folders: Box<[Folder]>,
+    pub dir_hash: u64,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -184,17 +185,17 @@ fn entry_type(entry: &std::fs::DirEntry) -> SlpResult<SlpDirEntryType> {
 }
 
 // files and folders not returned in any particular order
-pub fn read_info_in_dir(
-    path: impl AsRef<Path>,
-) -> SlpResult<SlpDirectoryInfo> {
+pub fn read_info_in_dir(path: impl AsRef<Path>) -> SlpResult<SlpDirectoryInfo> {
     let mut slp_files = Vec::with_capacity(128);
     let mut folders = Vec::with_capacity(16);
+    let mut hash = 0;
 
     for entry in std::fs::read_dir(path).map_err(|_| SlpError::IOError)? {
         let entry = entry.map_err(|_| SlpError::IOError)?;
         match entry_type(&entry)? {
             SlpDirEntryType::SlpFile => {
                 let game_path = entry.path();
+                hash ^= simple_hash(game_path.as_os_str().as_encoded_bytes());
                 let info = match read_info(&game_path) {
                     Ok(info) => info,
                     Err(e) => {
@@ -210,23 +211,9 @@ pub fn read_info_in_dir(
             }
             SlpDirEntryType::Directory => {
                 let folder_path = entry.path();
-
-                //let mut folder_count = 0;
-                //let mut slp_count = 0;
-
-                //for sub_entry in std::fs::read_dir(&folder_path).map_err(|_| SlpError::IOError)? {
-                //    let sub_entry = sub_entry.map_err(|_| SlpError::IOError)?;
-                //    match entry_type(&sub_entry)? {
-                //        SlpDirEntryType::SlpFile => slp_count += 1,
-                //        SlpDirEntryType::Directory => folder_count += 1,
-                //        _ => (),
-                //    }
-                //}
-
+                hash ^= simple_hash(folder_path.as_os_str().as_encoded_bytes());
                 folders.push(Folder {
                     path: folder_path.into_boxed_path(),
-                    //folder_count,
-                    //slp_count,
                 });
             }
             _ => (),
@@ -236,8 +223,48 @@ pub fn read_info_in_dir(
     Ok(SlpDirectoryInfo {
         slp_files: slp_files.into_boxed_slice(),
         folders: folders.into_boxed_slice(),
+        dir_hash: hash,
     })
 }
+
+pub fn dir_hash(path: impl AsRef<Path>) -> SlpResult<u64> {
+    let mut hash = 0;
+
+    for entry in std::fs::read_dir(path).map_err(|_| SlpError::IOError)? {
+        let entry = entry.map_err(|_| SlpError::IOError)?;
+        match entry_type(&entry)? {
+            SlpDirEntryType::SlpFile => {
+                let game_path = entry.path();
+                hash ^= simple_hash(game_path.as_os_str().as_encoded_bytes());
+            }
+            SlpDirEntryType::Directory => {
+                let folder_path = entry.path();
+                hash ^= simple_hash(folder_path.as_os_str().as_encoded_bytes());
+            }
+            _ => (),
+        }
+    }
+    
+    Ok(hash)
+}
+
+// order independent (simple xor hash)
+fn simple_hash(bytes: &[u8]) -> u64 {
+    let mut hash = 0;
+    
+    let mut chunks = bytes.chunks_exact(8);
+    while let Some(c) = chunks.next() {
+        hash ^= u64::from_ne_bytes(c.try_into().unwrap());
+    }
+
+    let mut n: u64 = 0;
+    for (i, b) in chunks.remainder().iter().enumerate() {
+        n |= (*b as u64) << i;
+    }
+
+    hash ^ n
+}
+
 
 pub fn read_info(path: &Path) -> SlpResult<GameInfo> {
     let mut file = std::fs::File::open(path).map_err(|_| SlpError::FileDoesNotExist)?;
