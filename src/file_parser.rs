@@ -284,10 +284,12 @@ fn parse_game_start(stream: &mut Stream, info: &StreamInfo) -> SlpResult<GameSta
         .ok_or(SlpError::InvalidFile)?;
     let high_char = Character::from_u8_external(high_char_idx)
         .ok_or(SlpError::InvalidFile)?;
+
+    // mods can add more colour indices, so replace with neutral colour
     let low_starting_character  = CharacterColour::from_character_and_colour(low_char, low_colour_idx)
-        .ok_or(SlpError::InvalidFile)?;
+        .unwrap_or_else(|| CharacterColour::from_character_and_colour(low_char, 0).unwrap());
     let high_starting_character = CharacterColour::from_character_and_colour(high_char, high_colour_idx)
-        .ok_or(SlpError::InvalidFile)?;
+        .unwrap_or_else(|| CharacterColour::from_character_and_colour(high_char, 0).unwrap());
 
     let low_name_offset = 0x1A5 + 0x1F * low_port_idx as usize - 1;
     let low_name = bytes[low_name_offset..low_name_offset+32].try_into().unwrap();
