@@ -17,6 +17,7 @@ pub fn implemented_character(c: Character) -> bool {
         | Character::Marth
         | Character::Peach
         | Character::Sheik
+        | Character::Samus
         | Character::CaptainFalcon => true,
         _ => false,
     }
@@ -422,5 +423,39 @@ special_states! {
         TransformGroundEnding        = 362 => Transform,      "SpecialLw2", // ?????
         TransformAir                 = 363 => Transform,      "SpecialAirLw",
         TransformAirEnding           = 364 => Transform,      "SpecialAirLw2", // ?????
+    }
+}
+
+special_states! {
+    Samus, SamusSpecialActionState, 
+    SamusSpecialBroadState, SamusHighLevelAction
+    {
+        ChargeShot, ParseAll, NoJumpVariants(),
+        ChargeShotFire, ParseAll, NoJumpVariants(),
+        SuperMissile, ParseAll, NoJumpVariants(),
+        HomingMissile, ParseAll, NoJumpVariants(),
+        Bomb, ParseAll, NoJumpVariants(),
+        ScrewAttack, ParseAll, NoJumpVariants(),
+        Zair, ParseAll, NoJumpVariants(),
+    },
+    {
+        BombJumpGround        = 341 => Bomb,           "SpecialLw",
+        BombJumpAir           = 342 => Bomb,           "SpecialAirLw",
+        ChargeShotGroundStart = 343 => ChargeShot,     "SpecialNStart",
+        ChargeShotGroundLoop  = 344 => ChargeShot,     "SpecialNHold",
+        ChargeShotGroundEnd   = 345 => ChargeShot,     "SpecialNCancel",
+        ChargeShotGroundFire  = 346 => ChargeShotFire, "SpecialN",
+        ChargeShotAirStart    = 347 => ChargeShot,     "SpecialAirNStart",
+        ChargeShotAirFire     = 348 => ChargeShotFire, "SpecialAirN",
+        MissileGround         = 349 => HomingMissile,  "SpecialS",
+        MissileSmashGround    = 350 => SuperMissile,   "Special",
+        MissileAir            = 351 => HomingMissile,  "SpecialAirS",
+        MissileSmashAir       = 352 => SuperMissile,   "SpecialAir",
+        ScrewAttackGround     = 353 => ScrewAttack,    "SpecialHi",
+        ScrewAttackAir        = 354 => ScrewAttack,    "SpecialAirHi",
+        BombEndGround         = 355 => Bomb,           "SpecialLw",
+        BombAir               = 356 => Bomb,           "SpecialAirLw",
+        Zair                  = 357 => Zair,           "AirCatch",
+        ZairCatch             = 358 => Zair,           "AirCatchHit",
     }
 }
