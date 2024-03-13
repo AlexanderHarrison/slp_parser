@@ -119,6 +119,7 @@ pub struct Game {
     pub item_idx: Box<[u16]>,
     pub items: Box<[Item]>,
     pub info: GameInfo,
+    pub notes: Notes,
 } 
 
 impl Game {
@@ -281,6 +282,47 @@ pub fn read_game(path: &Path) -> SlpResult<Game> {
 
     let game = file_parser::parse_file(&mut file_parser::Stream::new(&buf))?;
     Ok(game)
+}
+
+pub fn write_notes_to_game(path: &Path, notes: &Notes) -> SlpResult<()> {
+    use std::io::{Read, Write, Seek};
+    let mut file = std::fs::OpenOptions::new().write(true).read(true)
+        .open(path).map_err(|_| SlpError::FileDoesNotExist)?;
+
+    let mut buf = [0u8; 1024];
+    let mut read_count = file.read(&mut buf)
+        .map_err(|_| SlpError::IOError)?;
+
+    // unlikely
+    while read_count < 1024 {
+        let read = file.read(&mut buf[read_count..])
+            .map_err(|_| SlpError::IOError)?;
+        if read == 0 { break } // file smaller than 1024 somehow
+        read_count += read;
+    }
+
+    let mut stream = Stream::new(&buf[0..read_count]);
+
+    let raw_len = skip_raw_header(&mut stream)?;
+
+    file.seek(std::io::SeekFrom::Start(HEADER_LEN + raw_len as u64)).map_err(|_| SlpError::IOError)?;
+    let read_count = file.read(&mut buf).map_err(|_| SlpError::IOError)?;
+
+    if let Some(prev_notes_i) = buf[..read_count].windows(5).position(|w| w == b"notes") {
+        let pos = -(read_count as i64) + prev_notes_i as i64 - 2 as i64;
+        file.seek(std::io::SeekFrom::Current(pos)).map_err(|_| SlpError::IOError)?;
+    } else {
+        file.seek(std::io::SeekFrom::End(-1)).map_err(|_| SlpError::IOError)?;
+    }
+
+    let mut note_bytes = write_notes(notes);
+    // overwritten
+    note_bytes.push(b'}');
+    file.write_all(&note_bytes).map_err(|_| SlpError::IOError)?;
+    let pos = file.stream_position().map_err(|_| SlpError::IOError)?;
+    file.set_len(pos).map_err(|_| SlpError::IOError)?;
+
+    Ok(())
 }
 
 pub fn parse_game(game: &Path, port: Port) -> SlpResult<Box<[Action]>> {

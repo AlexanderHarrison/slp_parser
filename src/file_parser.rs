@@ -10,6 +10,14 @@ const ITEM_UPDATE:          u8 = 0x3B;
 const FRAME_BOOKEND:        u8 = 0x3C;
 //const GECKO_LIST:           u8 = 0x3D;
 
+/// Dynamically sized. if it occurs as a native event, the message will be 64 bytes long.
+/// Messages longer than 64 bytes will be contained inside message splitter events.
+///
+/// offset | name         |  type    |  desc
+/// 0x00   | command byte | uint8    | 0x69
+/// 0x01   | message      | utf8     | null terminated
+///const NOTE: u8 = 0x69;
+
 // TODO not make such a mess
 // - remake Stream
 // - fix ambiguous command byte + weird byte offsets
@@ -17,7 +25,7 @@ const FRAME_BOOKEND:        u8 = 0x3C;
 pub const MIN_VERSION_MAJOR: u8 = 3;
 pub const MIN_VERSION_MINOR: u8 = 13;
 
-const HEADER_LEN: u64 = 14;
+pub const HEADER_LEN: u64 = 14;
 
 struct StreamInfo {
     pub event_payload_sizes: [u16; 255],  
@@ -121,7 +129,16 @@ fn merge_metadata(game_start_info: GameStartInfo, metadata: Metadata) -> GameInf
     }
 }
 
-struct Metadata {
+#[derive(Clone, Debug)]
+pub struct Notes {
+    pub data: String,
+    pub start_frames: Vec<i32>,
+    pub frame_lengths: Vec<i32>,
+    pub data_idx: Vec<i32>,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct Metadata {
     pub duration: u32,
     pub time: Time,
 }
@@ -143,8 +160,118 @@ fn parse_metadata(bytes: &[u8]) -> Metadata {
 
     Metadata {
         duration,
-        time
+        time,
     }
+}
+
+/// expects metadata
+pub fn parse_notes(metadata: &[u8]) -> Notes {
+    let mut data = String::new();
+    let mut start_frames = Vec::new();
+    let mut frame_lengths = Vec::new();
+    let mut data_idx = Vec::new();
+
+    if let Some(i) = metadata.windows(5).position(|w| w == b"notes") {
+        let mut bytes = &metadata[i..];
+
+        for b in bytes {
+            print!("{:02x} ", b);
+        }
+
+        let count_i = bytes.windows(5).position(|w| w == b"count").unwrap();
+        let count = i32::from_be_bytes(bytes[(count_i+6)..(count_i+10)].try_into().unwrap()) as usize;
+        println!("{}", count);
+
+        start_frames.reserve_exact(count);
+        frame_lengths.reserve_exact(count);
+        data_idx.reserve_exact(count);
+
+        let data_i = bytes.windows(4).position(|w| w == b"data").unwrap();
+        let data_len = i32::from_be_bytes(bytes[(data_i+6)..(data_i+10)].try_into().unwrap()) as usize;
+        data = std::str::from_utf8(&bytes[(data_i+10)..(data_i+10+data_len)]).unwrap().to_string();
+        bytes = &bytes[(data_i+data_len+10)..];
+
+        fn parse_array(bytes: &[u8], count: usize, vec: &mut Vec<i32>, name: &[u8]) -> usize {
+            let arr_i = bytes.windows(name.len()).position(|w| w == name).unwrap();
+            let end = arr_i+name.len()+1+count*5;
+            let data = &bytes[(arr_i+name.len()+1)..end];
+
+            for c in data.chunks(5) {
+                vec.push(i32::from_be_bytes(c[1..].try_into().unwrap()))
+            }
+
+            end
+        }
+
+        let end = parse_array(bytes, count, &mut start_frames, b"startFrames");
+        bytes = &bytes[end..];
+        let end = parse_array(bytes, count, &mut frame_lengths, b"frameLengths");
+        bytes = &bytes[end..];
+        parse_array(bytes, count, &mut data_idx, b"dataStart");
+    }
+
+    Notes {
+        data,
+        start_frames,
+        frame_lengths,
+        data_idx,
+    }
+}
+
+/// writes in ubjson format
+pub fn write_notes(notes: &Notes) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(64);
+    let buffer = &mut buf;
+    fn write_u8(buffer: &mut Vec<u8>, n: u8) {
+        buffer.push(b'U');
+        buffer.push(n);
+    }
+
+    fn write_i32(buffer: &mut Vec<u8>, n: i32) {
+        buffer.push(b'l');
+        buffer.extend_from_slice(&n.to_be_bytes());
+    }
+
+    fn write_field(buffer: &mut Vec<u8>, s: &str) {
+        write_u8(buffer, s.len() as u8);
+        buffer.extend_from_slice(s.as_bytes());
+    }
+
+    write_field(buffer, "notes");
+    buffer.push(b'{');
+
+    write_field(buffer, "count");
+    write_i32(buffer, notes.start_frames.len() as i32);
+
+    write_field(buffer, "data");
+    buffer.push(b'S');
+    write_i32(buffer, notes.data.len() as i32);
+    buffer.extend_from_slice(notes.data.as_bytes());
+
+    write_field(buffer, "startFrames");
+    buffer.push(b'[');
+    for f in notes.start_frames.iter().copied() {
+        write_i32(buffer, f);
+    }
+    buffer.push(b']');
+
+    write_field(buffer, "frameLengths");
+    buffer.push(b'[');
+    for f in notes.frame_lengths.iter().copied() {
+        write_i32(buffer, f);
+    }
+    buffer.push(b']');
+
+    write_field(buffer, "dataStart");
+    buffer.push(b'[');
+    for f in notes.data_idx.iter().copied() {
+        write_i32(buffer, f);
+    }
+    buffer.push(b']');
+
+    buffer.push(b'}');
+
+    buf
 }
 
 pub fn parse_file(stream: &mut Stream) -> SlpResult<Game> {
@@ -226,6 +353,7 @@ pub fn parse_file(stream: &mut Stream) -> SlpResult<Game> {
     }
 
     let metadata = parse_metadata(metadata_bytes);
+    let notes = parse_notes(metadata_bytes);
 
     Ok(Game {
         high_port_frames: high_port_frames.into_boxed_slice(), 
@@ -233,10 +361,11 @@ pub fn parse_file(stream: &mut Stream) -> SlpResult<Game> {
         item_idx: item_idx.into_boxed_slice(),
         items: items.into_boxed_slice(),
         info: merge_metadata(game_start_info, metadata),
+        notes,
     })
 }
 
-fn skip_raw_header(stream: &mut Stream) -> SlpResult<u32> {
+pub fn skip_raw_header(stream: &mut Stream) -> SlpResult<u32> {
     const HEADER: &'static str = "raw[$U#l";
     for c in HEADER.bytes() {
         let mut next_b = stream.take_u8()?;
