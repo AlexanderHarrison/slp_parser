@@ -157,8 +157,8 @@ pub struct Folder {
     
 #[derive(Clone, Debug)]
 pub struct SlpDirectoryInfo {
-    pub slp_files: Box<[SlpFileInfo]>,
-    pub folders: Box<[Folder]>,
+    pub slp_files: Vec<SlpFileInfo>,
+    pub folders: Vec<Folder>,
     pub dir_hash: u64,
 }
 
@@ -186,9 +186,12 @@ fn entry_type(entry: &std::fs::DirEntry) -> SlpResult<SlpDirEntryType> {
 }
 
 // files and folders not returned in any particular order
-pub fn read_info_in_dir(path: impl AsRef<Path>) -> SlpResult<SlpDirectoryInfo> {
-    let mut slp_files = Vec::with_capacity(128);
-    let mut folders = Vec::with_capacity(16);
+pub fn read_info_in_dir(
+    path: impl AsRef<Path>,
+    prev: &mut SlpDirectoryInfo
+) -> SlpResult<()> {
+    prev.slp_files.clear();
+    prev.folders.clear();
     let mut hash = 0;
 
     for entry in std::fs::read_dir(path).map_err(|_| SlpError::IOError)? {
@@ -205,7 +208,7 @@ pub fn read_info_in_dir(path: impl AsRef<Path>) -> SlpResult<SlpDirectoryInfo> {
                     }
                 };
 
-                slp_files.push(SlpFileInfo {
+                prev.slp_files.push(SlpFileInfo {
                     path: game_path.into_boxed_path(),
                     info,
                 });
@@ -213,7 +216,7 @@ pub fn read_info_in_dir(path: impl AsRef<Path>) -> SlpResult<SlpDirectoryInfo> {
             SlpDirEntryType::Directory => {
                 let folder_path = entry.path();
                 hash ^= simple_hash(folder_path.as_os_str().as_encoded_bytes());
-                folders.push(Folder {
+                prev.folders.push(Folder {
                     path: folder_path.into_boxed_path(),
                 });
             }
@@ -221,11 +224,9 @@ pub fn read_info_in_dir(path: impl AsRef<Path>) -> SlpResult<SlpDirectoryInfo> {
         }
     }
 
-    Ok(SlpDirectoryInfo {
-        slp_files: slp_files.into_boxed_slice(),
-        folders: folders.into_boxed_slice(),
-        dir_hash: hash,
-    })
+    prev.dir_hash = hash;
+
+    Ok(())
 }
 
 pub fn dir_hash(path: impl AsRef<Path>) -> SlpResult<u64> {
