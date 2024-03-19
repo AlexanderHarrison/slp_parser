@@ -274,7 +274,7 @@ pub fn write_notes(notes: &Notes) -> Vec<u8> {
     buf
 }
 
-pub fn parse_file(stream: &mut Stream) -> SlpResult<Game> {
+pub fn parse_file(stream: &mut Stream) -> SlpResult<(Game, Notes)> {
     let raw_len = skip_raw_header(stream)?;
     let metadata_bytes = &stream.as_slice()[raw_len as usize..];
 
@@ -355,14 +355,13 @@ pub fn parse_file(stream: &mut Stream) -> SlpResult<Game> {
     let metadata = parse_metadata(metadata_bytes);
     let notes = parse_notes(metadata_bytes);
 
-    Ok(Game {
+    Ok((Game {
         high_port_frames: high_port_frames.into_boxed_slice(), 
         low_port_frames: low_port_frames.into_boxed_slice(),
         item_idx: item_idx.into_boxed_slice(),
         items: items.into_boxed_slice(),
         info: merge_metadata(game_start_info, metadata),
-        notes,
-    })
+    }, notes))
 }
 
 pub fn skip_raw_header(stream: &mut Stream) -> SlpResult<u32> {

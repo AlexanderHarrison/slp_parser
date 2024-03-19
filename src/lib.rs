@@ -119,7 +119,6 @@ pub struct Game {
     pub item_idx: Box<[u16]>,
     pub items: Box<[Item]>,
     pub info: GameInfo,
-    pub notes: Notes,
 } 
 
 impl Game {
@@ -274,7 +273,7 @@ pub fn read_info(path: &Path) -> SlpResult<GameInfo> {
     Ok(info)
 }
 
-pub fn read_game(path: &Path) -> SlpResult<Game> {
+pub fn read_game(path: &Path) -> SlpResult<(Game, Notes)> {
     use std::io::Read;
 
     let mut file = std::fs::File::open(path).map_err(|_| SlpError::FileDoesNotExist)?;
@@ -338,7 +337,7 @@ pub fn parse_game(game: &Path, port: Port) -> SlpResult<Box<[Action]>> {
 
 pub fn parse_buf(buf: &[u8], port: Port) -> SlpResult<Box<[Action]>> {
     let mut stream = file_parser::Stream::new(buf);
-    let game = file_parser::parse_file(&mut stream)?;
+    let (game, _) = file_parser::parse_file(&mut stream)?;
 
     let frames = match port {
         Port::High => &game.high_port_frames,
