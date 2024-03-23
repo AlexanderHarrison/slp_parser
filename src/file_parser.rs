@@ -8,6 +8,11 @@ const GAME_END:             u8 = 0x39;
 //const FRAME_START:          u8 = 0x3A;
 const ITEM_UPDATE:          u8 = 0x3B;
 const FRAME_BOOKEND:        u8 = 0x3C;
+
+const FOD_INFO:             u8 = 0x3F;
+const DREAMLAND_INFO:       u8 = 0x40;
+const STADIUM_INFO:         u8 = 0x41;
+
 //const GECKO_LIST:           u8 = 0x3D;
 
 /// Dynamically sized. if it occurs as a native event, the message will be 64 bytes long.
@@ -173,14 +178,8 @@ pub fn parse_notes(metadata: &[u8]) -> Notes {
 
     if let Some(i) = metadata.windows(5).position(|w| w == b"notes") {
         let mut bytes = &metadata[i..];
-
-        for b in bytes {
-            print!("{:02x} ", b);
-        }
-
         let count_i = bytes.windows(5).position(|w| w == b"count").unwrap();
         let count = i32::from_be_bytes(bytes[(count_i+6)..(count_i+10)].try_into().unwrap()) as usize;
-        println!("{}", count);
 
         start_frames.reserve_exact(count);
         frame_lengths.reserve_exact(count);
@@ -297,6 +296,8 @@ pub fn parse_file(stream: &mut Stream) -> SlpResult<(Game, Notes)> {
         analog_trigger_value: 0.0, 
     };
     let mut pre_frame_high = pre_frame_low;
+    
+    let mut stage_info = None;
 
     loop {
         let next_command_byte = stream.take_u8()?;
@@ -347,8 +348,61 @@ pub fn parse_file(stream: &mut Stream) -> SlpResult<(Game, Notes)> {
                     item_idx.push(items.len() as _);
                 }
             }
+            FOD_INFO => {
+                let fountain_heights = match stage_info {
+                    Some(StageInfo::Fountain(ref mut heights)) => heights,
+                    None => {
+                        stage_info = Some(StageInfo::Fountain(FountainHeights {
+                            heights_l: Vec::new(),
+                            heights_r: Vec::new(),
+                        }));
+
+                        match stage_info {
+                            Some(StageInfo::Fountain(ref mut heights)) => heights,
+                            _ => unreachable!(),
+                        }
+                    },
+                    _ => unreachable!(),
+                };
+
+                let mut stream = stream_info.create_event_stream(FOD_INFO, stream)?;
+                let frame = stream.take_i32()?;
+                let plat = stream.take_u8()?;
+                let height = stream.take_float()?;
+
+                match plat {
+                    0 => fountain_heights.heights_r.push((frame, height)),
+                    1 => fountain_heights.heights_l.push((frame, height)),
+                    _ => unreachable!()
+                };
+            }
+            DREAMLAND_INFO => {
+                let mut _stream = stream_info.create_event_stream(DREAMLAND_INFO, stream)?;
+                //println!("dreamland: {:x?}", stream.bytes);
+            }
+            STADIUM_INFO => {
+                //let transformations = match stage_info {
+                //    Some(StageInfo::Stadium(ref mut transformations)) => transformations,
+                //    None => {
+                //        stage_info = Some(StageInfo::Stadium(StadiumTransformations {
+                //            transformations: Vec::new(),
+                //        }));
+
+                //        match stage_info {
+                //            Some(StageInfo::Stadium(ref mut heights)) => heights,
+                //            _ => unreachable!(),
+                //        }
+                //    },
+                //    _ => unreachable!(),
+                //};
+
+                let mut _stream = stream_info.create_event_stream(STADIUM_INFO, stream)?;
+                //println!("stadium: {:x?}", stream.bytes);
+            }
             GAME_END => break,
-            _ => stream_info.skip_event(next_command_byte, stream)?,
+            _ => {
+                stream_info.skip_event(next_command_byte, stream)?;
+            }
         }
     }
 
@@ -361,6 +415,7 @@ pub fn parse_file(stream: &mut Stream) -> SlpResult<(Game, Notes)> {
         item_idx: item_idx.into_boxed_slice(),
         items: items.into_boxed_slice(),
         info: merge_metadata(game_start_info, metadata),
+        stage_info,
     }, notes))
 }
 

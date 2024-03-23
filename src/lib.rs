@@ -119,7 +119,37 @@ pub struct Game {
     pub item_idx: Box<[u16]>,
     pub items: Box<[Item]>,
     pub info: GameInfo,
+
+    pub stage_info: Option<StageInfo>,
 } 
+
+#[derive(Clone, Debug)]
+pub struct FountainHeights {
+    // (frame, height)
+    pub heights_l: Vec<(i32, f32)>,
+    pub heights_r: Vec<(i32, f32)>,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum StadiumTransformation {
+    Normal,
+    Grass,
+    Water,
+    Fire,
+    Rock,
+}
+
+#[derive(Clone, Debug)]
+pub struct StadiumTransformations {
+    // (frame, new transformation)
+    pub transformations: Vec<(i32, StadiumTransformation)>,
+}
+
+#[derive(Clone, Debug)]
+pub enum StageInfo {
+    Fountain(FountainHeights),
+    Stadium(StadiumTransformations)
+}
 
 impl Game {
     pub fn items_on_frame(&self, frame: usize) -> &[Item] {
