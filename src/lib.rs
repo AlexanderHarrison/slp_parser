@@ -142,13 +142,13 @@ pub enum StadiumTransformation {
 #[derive(Clone, Debug)]
 pub struct StadiumTransformations {
     // (frame, new transformation)
-    pub transformations: Vec<(i32, StadiumTransformation)>,
+    pub events: Vec<(i32, StadiumTransformation)>,
 }
 
 #[derive(Clone, Debug)]
 pub enum StageInfo {
     Fountain(FountainHeights),
-    Stadium(StadiumTransformations)
+    Stadium(StadiumTransformations),
 }
 
 impl Game {

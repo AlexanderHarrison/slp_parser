@@ -381,23 +381,42 @@ pub fn parse_file(stream: &mut Stream) -> SlpResult<(Game, Notes)> {
                 //println!("dreamland: {:x?}", stream.bytes);
             }
             STADIUM_INFO => {
-                //let transformations = match stage_info {
-                //    Some(StageInfo::Stadium(ref mut transformations)) => transformations,
-                //    None => {
-                //        stage_info = Some(StageInfo::Stadium(StadiumTransformations {
-                //            transformations: Vec::new(),
-                //        }));
+                let transformations = match stage_info {
+                    Some(StageInfo::Stadium(ref mut transformations)) => transformations,
+                    None => {
+                        stage_info = Some(StageInfo::Stadium(StadiumTransformations {
+                            events: Vec::new(),
+                        }));
 
-                //        match stage_info {
-                //            Some(StageInfo::Stadium(ref mut heights)) => heights,
-                //            _ => unreachable!(),
-                //        }
-                //    },
-                //    _ => unreachable!(),
-                //};
+                        match stage_info {
+                            Some(StageInfo::Stadium(ref mut transformations)) => transformations,
+                            _ => unreachable!(),
+                        }
+                    },
+                    _ => unreachable!(),
+                };
 
-                let mut _stream = stream_info.create_event_stream(STADIUM_INFO, stream)?;
-                //println!("stadium: {:x?}", stream.bytes);
+                let mut stream = stream_info.create_event_stream(STADIUM_INFO, stream)?;
+                let frame = stream.take_i32()?;
+                let event = stream.take_u16()?;
+                let transformation_id = stream.take_u16()?;
+    
+                println!("{}: {} {}", frame, transformation_id, event);
+
+                // only care about first event
+                if event == 2 {
+
+                    let transformation = match transformation_id {
+                        3 => StadiumTransformation::Fire,
+                        4 => StadiumTransformation::Grass,
+                        5 => StadiumTransformation::Normal,
+                        6 => StadiumTransformation::Rock,
+                        9 => StadiumTransformation::Water,
+                        _ => return Err(SlpError::InvalidFile),
+                    };
+
+                    transformations.events.push((frame, transformation));
+                }
             }
             GAME_END => break,
             _ => {
