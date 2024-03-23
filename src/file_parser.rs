@@ -400,8 +400,6 @@ pub fn parse_file(stream: &mut Stream) -> SlpResult<(Game, Notes)> {
                 let frame = stream.take_i32()?;
                 let event = stream.take_u16()?;
                 let transformation_id = stream.take_u16()?;
-    
-                println!("{}: {} {}", frame, transformation_id, event);
 
                 // only care about first event
                 if event == 2 {
