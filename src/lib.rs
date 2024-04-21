@@ -53,6 +53,7 @@ pub struct Frame {
     pub hit_velocity: Vector,
     pub position: Vector,
     pub state: ActionState,
+    pub state_num: u16,
     pub anim_frame: f32,
     pub shield_size: f32,
     pub analog_trigger_value: f32,

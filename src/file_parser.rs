@@ -64,6 +64,7 @@ struct PostFrameInfo {
     pub hit_velocity: Vector,
     pub position: Vector,
     pub state: ActionState,
+    pub state_num: u16,
     pub anim_frame: f32,
     pub shield_size: f32,
     pub stock_count: u8,
@@ -79,6 +80,7 @@ fn merge_pre_post_frames(pre: PreFrameInfo, post: PostFrameInfo) -> Frame {
         hit_velocity: post.hit_velocity, 
         position: post.position,     
         state: post.state,        
+        state_num: post.state_num,
         anim_frame: post.anim_frame,   
         shield_size: post.shield_size,
         analog_trigger_value: pre.analog_trigger_value,
@@ -403,7 +405,6 @@ pub fn parse_file(stream: &mut Stream) -> SlpResult<(Game, Notes)> {
 
                 // only care about first event
                 if event == 2 {
-
                     let transformation = match transformation_id {
                         3 => StadiumTransformation::Fire,
                         4 => StadiumTransformation::Grass,
@@ -631,8 +632,8 @@ fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Po
         x: f32::from_be_bytes(bytes[0x9..0xD].try_into().unwrap()),
         y: f32::from_be_bytes(bytes[0xD..0x11].try_into().unwrap()),
     };
-    let state_u16 = u16::from_be_bytes(bytes[0x7..0x9].try_into().unwrap());
-    let state = ActionState::from_u16(state_u16, character)?;
+    let state_num = u16::from_be_bytes(bytes[0x7..0x9].try_into().unwrap());
+    let state = ActionState::from_u16(state_num, character)?;
     let percent = f32::from_be_bytes(bytes[0x15..0x19].try_into().unwrap());
     let shield_size = f32::from_be_bytes(bytes[0x19..0x1D].try_into().unwrap());
     let stock_count = bytes[0x20];
@@ -646,6 +647,7 @@ fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Po
         velocity,
         hit_velocity,
         state,
+        state_num,
         anim_frame,
         shield_size,
         stock_count,

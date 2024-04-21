@@ -18,6 +18,7 @@ pub fn implemented_character(c: Character) -> bool {
         | Character::Peach
         | Character::Sheik
         | Character::Samus
+        | Character::Zelda // TEMP
         | Character::CaptainFalcon => true,
         _ => false,
     }
