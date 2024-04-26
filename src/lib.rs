@@ -59,6 +59,7 @@ pub struct Frame {
     pub analog_trigger_value: f32,
     pub percent: f32,
     pub stock_count: u8,
+    pub hitlag_frames: f32,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]

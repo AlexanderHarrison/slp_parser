@@ -69,6 +69,7 @@ struct PostFrameInfo {
     pub shield_size: f32,
     pub stock_count: u8,
     pub percent: f32,
+    pub hitlag_frames: f32,
 }
 
 fn merge_pre_post_frames(pre: PreFrameInfo, post: PostFrameInfo) -> Frame {
@@ -86,6 +87,7 @@ fn merge_pre_post_frames(pre: PreFrameInfo, post: PostFrameInfo) -> Frame {
         analog_trigger_value: pre.analog_trigger_value,
         stock_count: post.stock_count,
         percent: post.percent,
+        hitlag_frames: post.hitlag_frames,
     }
 }
 
@@ -638,6 +640,7 @@ fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Po
     let shield_size = f32::from_be_bytes(bytes[0x19..0x1D].try_into().unwrap());
     let stock_count = bytes[0x20];
     let anim_frame = f32::from_be_bytes(bytes[0x21..0x25].try_into().unwrap());
+    let hitlag_frames = f32::from_be_bytes(bytes[0x48..0x4C].try_into().unwrap());
 
     Ok(PostFrameInfo {
         port_idx,
@@ -652,6 +655,7 @@ fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Po
         shield_size,
         stock_count,
         percent,
+        hitlag_frames,
     })
 }
 
