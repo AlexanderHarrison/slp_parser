@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-decancer = "1.6.5"
+decancer = "3.2"
