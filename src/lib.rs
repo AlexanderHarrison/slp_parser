@@ -234,7 +234,7 @@ pub fn read_info_in_dir(
                 let info = match read_info(&game_path) {
                     Ok(info) => info,
                     Err(e) => {
-                        eprintln!("error {e} reading file info, skipped {}", game_path.display());
+                        eprintln!("skipped {}: {}", game_path.display(), e);
                         continue;
                     }
                 };

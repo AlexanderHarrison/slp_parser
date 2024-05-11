@@ -148,6 +148,38 @@ pub enum Character {
 }
 
 impl Character {
+    pub fn neutral(self) -> CharacterColour {
+        match self {
+            Character::Mario          => CharacterColour::Mario         (character_colours::MarioColour::Neutral),
+            Character::Fox            => CharacterColour::Fox           (character_colours::FoxColour::Neutral),
+            Character::CaptainFalcon  => CharacterColour::CaptainFalcon (character_colours::CaptainFalconColour::Neutral),
+            Character::DonkeyKong     => CharacterColour::DonkeyKong    (character_colours::DonkeyKongColour::Neutral),
+            Character::Kirby          => CharacterColour::Kirby         (character_colours::KirbyColour::Neutral),
+            Character::Bowser         => CharacterColour::Bowser        (character_colours::BowserColour::Neutral),
+            Character::Link           => CharacterColour::Link          (character_colours::LinkColour::Neutral),
+            Character::Sheik          => CharacterColour::Sheik         (character_colours::ZeldaColour::Neutral),
+            Character::Ness           => CharacterColour::Ness          (character_colours::NessColour::Neutral),
+            Character::Peach          => CharacterColour::Peach         (character_colours::PeachColour::Neutral),
+            Character::Popo           => CharacterColour::Popo          (character_colours::IceClimbersColour::Neutral),
+            Character::Nana           => CharacterColour::Nana          (character_colours::IceClimbersColour::Neutral),
+            Character::Pikachu        => CharacterColour::Pikachu       (character_colours::PikachuColour::Neutral),
+            Character::Samus          => CharacterColour::Samus         (character_colours::SamusColour::Neutral),
+            Character::Yoshi          => CharacterColour::Yoshi         (character_colours::YoshiColour::Neutral),
+            Character::Jigglypuff     => CharacterColour::Jigglypuff    (character_colours::JigglypuffColour::Neutral),
+            Character::Mewtwo         => CharacterColour::Mewtwo        (character_colours::MewtwoColour::Neutral),
+            Character::Luigi          => CharacterColour::Luigi         (character_colours::LuigiColour::Neutral),
+            Character::Marth          => CharacterColour::Marth         (character_colours::MarthColour::Neutral),
+            Character::Zelda          => CharacterColour::Zelda         (character_colours::ZeldaColour::Neutral),
+            Character::YoungLink      => CharacterColour::YoungLink     (character_colours::YoungLinkColour::Neutral),
+            Character::DrMario        => CharacterColour::DrMario       (character_colours::DrMarioColour::Neutral),
+            Character::Falco          => CharacterColour::Falco         (character_colours::FalcoColour::Neutral),
+            Character::Pichu          => CharacterColour::Pichu         (character_colours::PichuColour::Neutral),
+            Character::MrGameAndWatch => CharacterColour::MrGameAndWatch(character_colours::MrGameAndWatchColour::Neutral),
+            Character::Ganondorf      => CharacterColour::Ganondorf     (character_colours::GanondorfColour::Neutral),
+            Character::Roy            => CharacterColour::Roy           (character_colours::RoyColour::Neutral),
+        }
+    }
+
     pub fn from_u8_internal(n: u8) -> Option<Self> {
         Some(match n {
             00 => Character::Mario         ,
