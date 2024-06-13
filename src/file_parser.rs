@@ -346,8 +346,12 @@ pub fn parse_file(stream: &mut Stream) -> SlpResult<(Game, Notes)> {
                         items[item_idx_restart+i] = items[item_start_this_frame+i];
                     }
                     items.truncate(item_idx_restart+item_count_this_frame);
-                    item_idx[frame_num+1] = items.len() as _;
-                    item_idx.truncate(frame_num+2);
+                    if item_idx.len() == frame_num+1 {
+                        item_idx.push(items.len() as _);
+                    } else {
+                        item_idx[frame_num+1] = items.len() as _;
+                        item_idx.truncate(frame_num+2);
+                    }
                 } else {
                     item_idx.push(items.len() as _);
                 }
@@ -615,9 +619,9 @@ fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Po
     let character = Character::from_u8_internal(bytes[0x6])
         .ok_or(SlpError::InvalidFile)?;
 
-    if !implemented_character(character) {
-        return Err(SlpError::UnimplementedCharacter(character));
-    }
+    //if !implemented_character(character) {
+    //    return Err(SlpError::UnimplementedCharacter(character));
+    //}
 
     let direction_f = f32::from_be_bytes(bytes[0x11..0x15].try_into().unwrap());
     let direction = if direction_f == 1.0 { Direction::Right } else { Direction::Left };
