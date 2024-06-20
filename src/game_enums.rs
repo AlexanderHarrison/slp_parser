@@ -148,6 +148,36 @@ pub enum Character {
 }
 
 impl Character {
+    pub const AS_LIST: &'static [Character] = &[
+        Character::Mario         ,
+        Character::Fox           ,
+        Character::CaptainFalcon ,
+        Character::DonkeyKong    ,
+        Character::Kirby         ,
+        Character::Bowser        ,
+        Character::Link          ,
+        Character::Sheik         ,
+        Character::Ness          ,
+        Character::Peach         ,
+        Character::Popo          ,
+        Character::Nana          ,
+        Character::Pikachu       ,
+        Character::Samus         ,
+        Character::Yoshi         ,
+        Character::Jigglypuff    ,
+        Character::Mewtwo        ,
+        Character::Luigi         ,
+        Character::Marth         ,
+        Character::Zelda         ,
+        Character::YoungLink     ,
+        Character::DrMario       ,
+        Character::Falco         ,
+        Character::Pichu         ,
+        Character::MrGameAndWatch,
+        Character::Ganondorf     ,
+        Character::Roy           ,
+    ];
+
     pub fn neutral(self) -> CharacterColour {
         match self {
             Character::Mario          => CharacterColour::Mario         (character_colours::MarioColour::Neutral),

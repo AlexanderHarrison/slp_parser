@@ -53,6 +53,7 @@ impl StreamInfo {
 struct PreFrameInfo {
     pub port_idx: u8,
     pub analog_trigger_value: f32,
+    pub left_stick_coords: [f32; 2],
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -85,6 +86,7 @@ fn merge_pre_post_frames(pre: PreFrameInfo, post: PostFrameInfo) -> Frame {
         anim_frame: post.anim_frame,   
         shield_size: post.shield_size,
         analog_trigger_value: pre.analog_trigger_value,
+        left_stick_coords: pre.left_stick_coords,
         stock_count: post.stock_count,
         percent: post.percent,
         hitlag_frames: post.hitlag_frames,
@@ -298,6 +300,7 @@ pub fn parse_file(stream: &mut Stream) -> SlpResult<(Game, Notes)> {
     let mut pre_frame_low = PreFrameInfo { 
         port_idx: 0,
         analog_trigger_value: 0.0, 
+        left_stick_coords: [0.0; 2],
     };
     let mut pre_frame_high = pre_frame_low;
     
@@ -600,10 +603,15 @@ fn parse_pre_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Pre
 
     let port_idx = bytes[0x4];
     let analog_trigger_value = f32::from_be_bytes(bytes[0x28..0x2C].try_into().unwrap());
+    let left_stick_coords = [
+        f32::from_be_bytes(bytes[0x18..0x1C].try_into().unwrap()),
+        f32::from_be_bytes(bytes[0x1C..0x20].try_into().unwrap()),
+    ];
 
     Ok(PreFrameInfo {
         port_idx,
         analog_trigger_value,
+        left_stick_coords,
     })
 }
 
@@ -618,10 +626,6 @@ fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Po
     let port_idx = bytes[0x4];
     let character = Character::from_u8_internal(bytes[0x6])
         .ok_or(SlpError::InvalidFile)?;
-
-    //if !implemented_character(character) {
-    //    return Err(SlpError::UnimplementedCharacter(character));
-    //}
 
     let direction_f = f32::from_be_bytes(bytes[0x11..0x15].try_into().unwrap());
     let direction = if direction_f == 1.0 { Direction::Right } else { Direction::Left };
