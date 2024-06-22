@@ -584,7 +584,6 @@ impl<'a> ActionBuilder<'a> {
         let position = start_frame.position;
         let velocity = start_frame.velocity;
 
-        // TODO wtf????
         let start_state = start_frame.state.broad_state();
 
         self.action_init_data = Some(ActionInitData {

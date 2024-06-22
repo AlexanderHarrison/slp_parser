@@ -5,3 +5,6 @@ edition = "2021"
 
 [dependencies]
 decancer = "3.2"
+
+[profile.release]
+debug=true

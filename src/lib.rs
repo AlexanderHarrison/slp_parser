@@ -1,5 +1,5 @@
-mod parser;
-pub use parser::*;
+mod game_parser;
+pub use game_parser::*;
 
 mod file_parser;
 pub use file_parser::*;
@@ -317,6 +317,7 @@ pub fn read_game(path: &Path) -> SlpResult<(Game, Notes)> {
     Ok(game)
 }
 
+// TODO do not truncate metadata after notes
 pub fn write_notes_to_game(path: &Path, notes: &Notes) -> SlpResult<()> {
     use std::io::{Read, Write, Seek};
     let mut file = std::fs::OpenOptions::new().write(true).read(true)

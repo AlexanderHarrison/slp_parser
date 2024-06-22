@@ -15,14 +15,6 @@ const STADIUM_INFO:         u8 = 0x41;
 
 //const GECKO_LIST:           u8 = 0x3D;
 
-/// Dynamically sized. if it occurs as a native event, the message will be 64 bytes long.
-/// Messages longer than 64 bytes will be contained inside message splitter events.
-///
-/// offset | name         |  type    |  desc
-/// 0x00   | command byte | uint8    | 0x69
-/// 0x01   | message      | utf8     | null terminated
-///const NOTE: u8 = 0x69;
-
 // TODO not make such a mess
 // - remake Stream
 // - fix ambiguous command byte + weird byte offsets

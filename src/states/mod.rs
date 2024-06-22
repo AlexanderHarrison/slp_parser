@@ -80,7 +80,7 @@ pub enum HighLevelAction {
     Crouch,
     Hitstun,
     Walljump,
-    Special(SpecialHighLevelAction) // not sure, maybe abstract (parasol?)
+    Special(SpecialHighLevelAction),
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
