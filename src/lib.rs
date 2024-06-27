@@ -226,16 +226,19 @@ pub fn read_info_in_dir(
     prev.folders.clear();
     let mut hash = 0;
 
+    let mut skipped = 0usize;
+
     for entry in std::fs::read_dir(path).map_err(|_| SlpError::IOError)? {
         let entry = entry.map_err(|_| SlpError::IOError)?;
         match entry_type(&entry)? {
             SlpDirEntryType::SlpFile => {
                 let game_path = entry.path();
                 hash ^= simple_hash(game_path.as_os_str().as_encoded_bytes());
+
                 let info = match read_info(&game_path) {
                     Ok(info) => info,
-                    Err(e) => {
-                        eprintln!("skipped {}: {}", game_path.display(), e);
+                    Err(_) => {
+                        skipped += 1;
                         continue;
                     }
                 };
@@ -255,6 +258,8 @@ pub fn read_info_in_dir(
             _ => (),
         }
     }
+
+    eprintln!("skipped {} slp files", skipped);
 
     prev.dir_hash = hash;
 
@@ -378,7 +383,7 @@ pub fn parse_buf(buf: &[u8], port: Port) -> SlpResult<Box<[Action]>> {
         Port::Low => &game.low_port_frames,
     };
 
-    Ok(parser::parse(frames).into_boxed_slice())
+    Ok(parse(frames).into_boxed_slice())
 }
 
 macro_rules! unwrap_or {

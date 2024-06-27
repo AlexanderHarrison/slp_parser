@@ -1,7 +1,6 @@
 use crate::{Action, BroadState, SpecialBroadState, ActionState, SpecialActionState, 
-    SpecialHighLevelAction, SlpError, SlpResult, Character};
-use crate::parser::{JumpType, ParseError, ActionBuilder};
-use crate::states::HighLevelAction;
+    SpecialHighLevelAction, SlpError, SlpResult, Character, JumpType, ParseError, 
+    ActionBuilder, HighLevelAction};
 use std::fmt;
 
 // HOW TO ADD: get char anim map using example
