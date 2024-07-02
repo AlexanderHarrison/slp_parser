@@ -210,6 +210,40 @@ impl Character {
         }
     }
 
+    pub fn to_u8_internal(self) -> u8 { self as u8 }
+
+    pub fn to_u8_external(self) -> Option<u8> {
+        Some(match self {
+            Character::CaptainFalcon  => 00,
+            Character::DonkeyKong     => 01,
+            Character::Fox            => 02,
+            Character::MrGameAndWatch => 03,
+            Character::Kirby          => 04,
+            Character::Bowser         => 05,
+            Character::Link           => 06,
+            Character::Luigi          => 07,
+            Character::Mario          => 08,
+            Character::Marth          => 09,
+            Character::Mewtwo         => 10,
+            Character::Ness           => 11,
+            Character::Peach          => 12,
+            Character::Pikachu        => 13,
+            Character::Popo           => 14,
+            Character::Jigglypuff     => 15,
+            Character::Samus          => 16,
+            Character::Yoshi          => 17,
+            Character::Zelda          => 18,
+            Character::Sheik          => 19,
+            Character::Falco          => 20,
+            Character::YoungLink      => 21,
+            Character::DrMario        => 22,
+            Character::Roy            => 23,
+            Character::Pichu          => 24,
+            Character::Ganondorf      => 25,
+            _ => return None
+        })
+    }
+
     pub fn from_u8_internal(n: u8) -> Option<Self> {
         Some(match n {
             00 => Character::Mario         ,
