@@ -571,6 +571,7 @@ fn parse_item_update(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Item> 
     let charge_shot_launched = bytes[0x27] == 1;
     let charge_shot_power = bytes[0x28];
     let owner = bytes[0x29] as i8;
+    let spawn_id = u32::from_be_bytes(bytes[0x21..0x25].try_into().unwrap());
 
     Ok(Item {
         type_id,
@@ -581,6 +582,7 @@ fn parse_item_update(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Item> 
         turnip_type,
         charge_shot_launched,
         charge_shot_power,
+        spawn_id,
         owner,
     })
 }

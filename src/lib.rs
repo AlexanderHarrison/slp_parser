@@ -73,6 +73,7 @@ pub struct Item {
     pub turnip_type: u8,
     pub charge_shot_launched: bool,
     pub charge_shot_power: u8,
+    pub spawn_id: u32,
     pub owner: i8,
 }
 
