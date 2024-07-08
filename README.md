@@ -1,4 +1,4 @@
-# Slippi Situation Parser
+# SLP Parser
 Parses slp files. Not everything is parsed, only the information needed in RWing.
 Orders of magnitude faster with fewer dependencies than peppi.
 Does not support stream based parsing, however.
