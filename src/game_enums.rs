@@ -67,6 +67,42 @@ impl Stage {
         })
     }
 
+    pub fn to_u16_external(self) -> u16 { self as u16 }
+
+    pub fn to_u16_internal(self) -> u16 {
+        match self {
+            Stage::FountainOfDreams     => 0x0C,
+            Stage::PokemonStadium       => 0x10,
+            Stage::PrincessPeachsCastle => 0x02,
+            Stage::KongoJungle          => 0x04,
+            Stage::Brinstar             => 0x08,
+            Stage::Corneria             => 0x0E,
+            Stage::YoshisStory          => 0x0B,
+            Stage::Onett                => 0x14,
+            Stage::MuteCity             => 0x12,
+            Stage::RainbowCruise        => 0x03,
+            Stage::JungleJapes          => 0x05,
+            Stage::GreatBay             => 0x06,
+            Stage::HyruleTemple         => 0x07,
+            Stage::BrinstarDepths       => 0x09,
+            Stage::YoshisIsland         => 0x0B,
+            Stage::GreenGreens          => 0x0D,
+            Stage::Fourside             => 0x15,
+            Stage::MushroomKingdomI     => 0x18,
+            Stage::MushroomKingdomII    => 0x19,
+            Stage::Venom                => 0x0F,
+            Stage::PokeFloats           => 0x11,
+            Stage::BigBlue              => 0x13,
+            Stage::IcicleMountain       => 0x16,
+            Stage::FlatZone             => 0x1B,
+            Stage::DreamLandN64         => 0x1C,
+            Stage::YoshisIslandN64      => 0x1D,
+            Stage::KongoJungleN64       => 0x1E,
+            Stage::Battlefield          => 0x24,
+            Stage::FinalDestination     => 0x25, // found by inspection
+        }
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Stage::FountainOfDreams     => "Fountain of Dreams",
@@ -213,35 +249,35 @@ impl Character {
     pub fn to_u8_internal(self) -> u8 { self as u8 }
 
     pub fn to_u8_external(self) -> Option<u8> {
-        Some(match self {
-            Character::CaptainFalcon  => 00,
-            Character::DonkeyKong     => 01,
-            Character::Fox            => 02,
-            Character::MrGameAndWatch => 03,
-            Character::Kirby          => 04,
-            Character::Bowser         => 05,
-            Character::Link           => 06,
-            Character::Luigi          => 07,
-            Character::Mario          => 08,
-            Character::Marth          => 09,
-            Character::Mewtwo         => 10,
-            Character::Ness           => 11,
-            Character::Peach          => 12,
-            Character::Pikachu        => 13,
-            Character::Popo           => 14,
-            Character::Jigglypuff     => 15,
-            Character::Samus          => 16,
-            Character::Yoshi          => 17,
-            Character::Zelda          => 18,
-            Character::Sheik          => 19,
-            Character::Falco          => 20,
-            Character::YoungLink      => 21,
-            Character::DrMario        => 22,
-            Character::Roy            => 23,
-            Character::Pichu          => 24,
-            Character::Ganondorf      => 25,
-            _ => return None
-        })
+        match self {
+            Character::CaptainFalcon  => Some(00),
+            Character::DonkeyKong     => Some(01),
+            Character::Fox            => Some(02),
+            Character::MrGameAndWatch => Some(03),
+            Character::Kirby          => Some(04),
+            Character::Bowser         => Some(05),
+            Character::Link           => Some(06),
+            Character::Luigi          => Some(07),
+            Character::Mario          => Some(08),
+            Character::Marth          => Some(09),
+            Character::Mewtwo         => Some(10),
+            Character::Ness           => Some(11),
+            Character::Peach          => Some(12),
+            Character::Pikachu        => Some(13),
+            Character::Popo           => Some(14),
+            Character::Jigglypuff     => Some(15),
+            Character::Samus          => Some(16),
+            Character::Yoshi          => Some(17),
+            Character::Zelda          => Some(18),
+            Character::Sheik          => Some(19),
+            Character::Falco          => Some(20),
+            Character::YoungLink      => Some(21),
+            Character::DrMario        => Some(22),
+            Character::Roy            => Some(23),
+            Character::Pichu          => Some(24),
+            Character::Ganondorf      => Some(25),
+            Character::Nana           => None,
+        }
     }
 
     pub fn from_u8_internal(n: u8) -> Option<Self> {
@@ -372,6 +408,38 @@ impl CharacterColour {
             Character::Ganondorf      => CharacterColour::Ganondorf      (GanondorfColour     ::from_u8(colour_idx)?),
             Character::Roy            => CharacterColour::Roy            (RoyColour           ::from_u8(colour_idx)?),
         })
+    }
+
+    pub fn costume_idx(self) -> u8 {
+        match self {
+            CharacterColour::Mario         (c) => c as u8,
+            CharacterColour::Fox           (c) => c as u8,
+            CharacterColour::CaptainFalcon (c) => c as u8,
+            CharacterColour::DonkeyKong    (c) => c as u8,
+            CharacterColour::Kirby         (c) => c as u8,
+            CharacterColour::Bowser        (c) => c as u8,
+            CharacterColour::Link          (c) => c as u8,
+            CharacterColour::Sheik         (c) => c as u8,
+            CharacterColour::Ness          (c) => c as u8,
+            CharacterColour::Peach         (c) => c as u8,
+            CharacterColour::Popo          (c) => c as u8,
+            CharacterColour::Nana          (c) => c as u8,
+            CharacterColour::Pikachu       (c) => c as u8,
+            CharacterColour::Samus         (c) => c as u8,
+            CharacterColour::Yoshi         (c) => c as u8,
+            CharacterColour::Jigglypuff    (c) => c as u8,
+            CharacterColour::Mewtwo        (c) => c as u8,
+            CharacterColour::Luigi         (c) => c as u8,
+            CharacterColour::Marth         (c) => c as u8,
+            CharacterColour::Zelda         (c) => c as u8,
+            CharacterColour::YoungLink     (c) => c as u8,
+            CharacterColour::DrMario       (c) => c as u8,
+            CharacterColour::Falco         (c) => c as u8,
+            CharacterColour::Pichu         (c) => c as u8,
+            CharacterColour::MrGameAndWatch(c) => c as u8,
+            CharacterColour::Ganondorf     (c) => c as u8,
+            CharacterColour::Roy           (c) => c as u8,
+        }
     }
 
     pub fn character(self) -> Character {
