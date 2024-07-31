@@ -51,15 +51,22 @@ pub struct Frame {
     pub direction: Direction,
     pub velocity: Vector,
     pub hit_velocity: Vector,
+    pub ground_x_velocity: f32,
     pub position: Vector,
     pub state: ActionState,
     pub state_num: u16,
     pub anim_frame: f32,
     pub shield_size: f32,
+
+    // controls
+    pub buttons_mask: ButtonsMask,
     pub analog_trigger_value: f32,
     pub left_stick_coords: [f32; 2], // processed values
+    pub right_stick_coords: [f32; 2],
+
     pub percent: f32,
     pub stock_count: u8,
+    pub is_airborne: bool,
     pub hitlag_frames: f32,
 }
 

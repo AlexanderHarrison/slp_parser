@@ -41,11 +41,29 @@ impl StreamInfo {
     }
 }
 
+pub type ButtonsMask = u16;
+pub mod buttons_mask {
+    pub const D_PAD_LEFT  : u16 = 0b0000000000000001;
+    pub const D_PAD_RIGHT : u16 = 0b0000000000000010;
+    pub const D_PAD_DOWN  : u16 = 0b0000000000000100;
+    pub const D_PAD_UP    : u16 = 0b0000000000001000;
+    pub const Z           : u16 = 0b0000000000010000;
+    pub const R_DIGITAL   : u16 = 0b0000000000100000;
+    pub const L_DIGITAL   : u16 = 0b0000000001000000;
+    pub const A           : u16 = 0b0000000100000000;
+    pub const B           : u16 = 0b0000001000000000;
+    pub const X           : u16 = 0b0000010000000000;
+    pub const Y           : u16 = 0b0000100000000000;
+    pub const START       : u16 = 0b0001000000000000;
+}
+
 #[derive(Copy, Clone, Debug)]
 struct PreFrameInfo {
     pub port_idx: u8,
+    pub buttons_mask: ButtonsMask,
     pub analog_trigger_value: f32,
     pub left_stick_coords: [f32; 2],
+    pub right_stick_coords: [f32; 2],
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -55,6 +73,7 @@ struct PostFrameInfo {
     pub direction: Direction,
     pub velocity: Vector,
     pub hit_velocity: Vector,
+    pub ground_x_velocity: f32,
     pub position: Vector,
     pub state: ActionState,
     pub state_num: u16,
@@ -62,6 +81,7 @@ struct PostFrameInfo {
     pub shield_size: f32,
     pub stock_count: u8,
     pub percent: f32,
+    pub is_airborne: bool,
     pub hitlag_frames: f32,
 }
 
@@ -72,14 +92,18 @@ fn merge_pre_post_frames(pre: PreFrameInfo, post: PostFrameInfo) -> Frame {
         direction: post.direction,    
         velocity: post.velocity,     
         hit_velocity: post.hit_velocity, 
+        ground_x_velocity: post.ground_x_velocity, 
         position: post.position,     
         state: post.state,        
         state_num: post.state_num,
         anim_frame: post.anim_frame,   
         shield_size: post.shield_size,
+        buttons_mask: pre.buttons_mask,
         analog_trigger_value: pre.analog_trigger_value,
         left_stick_coords: pre.left_stick_coords,
+        right_stick_coords: pre.right_stick_coords,
         stock_count: post.stock_count,
+        is_airborne: post.is_airborne,
         percent: post.percent,
         hitlag_frames: post.hitlag_frames,
     }
@@ -291,7 +315,9 @@ pub fn parse_file(stream: &mut Stream) -> SlpResult<(Game, Notes)> {
     // dummy values
     let mut pre_frame_low = PreFrameInfo { 
         port_idx: 0,
+        buttons_mask: 0, 
         analog_trigger_value: 0.0, 
+        right_stick_coords: [0.0; 2],
         left_stick_coords: [0.0; 2],
     };
     let mut pre_frame_high = pre_frame_low;
@@ -601,11 +627,19 @@ fn parse_pre_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Pre
         f32::from_be_bytes(bytes[0x18..0x1C].try_into().unwrap()),
         f32::from_be_bytes(bytes[0x1C..0x20].try_into().unwrap()),
     ];
+    let right_stick_coords = [
+        f32::from_be_bytes(bytes[0x20..0x24].try_into().unwrap()),
+        f32::from_be_bytes(bytes[0x24..0x28].try_into().unwrap()),
+    ];
+
+    let buttons_mask = u16::from_be_bytes(bytes[0x30..0x32].try_into().unwrap());
 
     Ok(PreFrameInfo {
         port_idx,
+        buttons_mask,
         analog_trigger_value,
         left_stick_coords,
+        right_stick_coords,
     })
 }
 
@@ -632,6 +666,7 @@ fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Po
         x: f32::from_be_bytes(bytes[0x3C..0x40].try_into().unwrap()),
         y: f32::from_be_bytes(bytes[0x40..0x44].try_into().unwrap()),
     };
+    let ground_x_velocity = f32::from_be_bytes(bytes[0x44..0x48].try_into().unwrap());
     let position = Vector {
         x: f32::from_be_bytes(bytes[0x9..0xD].try_into().unwrap()),
         y: f32::from_be_bytes(bytes[0xD..0x11].try_into().unwrap()),
@@ -643,6 +678,7 @@ fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Po
     let stock_count = bytes[0x20];
     let anim_frame = f32::from_be_bytes(bytes[0x21..0x25].try_into().unwrap());
     let hitlag_frames = f32::from_be_bytes(bytes[0x48..0x4C].try_into().unwrap());
+    let is_airborne = bytes[0x2E] == 1;
 
     Ok(PostFrameInfo {
         port_idx,
@@ -651,11 +687,13 @@ fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Po
         position,
         velocity,
         hit_velocity,
+        ground_x_velocity,
         state,
         state_num,
         anim_frame,
         shield_size,
         stock_count,
+        is_airborne,
         percent,
         hitlag_frames,
     })
