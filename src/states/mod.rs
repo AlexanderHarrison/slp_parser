@@ -1100,11 +1100,34 @@ impl SpecialActionState {
     }
 
     pub fn as_u16(self) -> u16 {
-        todo!();
-
-        //match self {
-        //    SpecialActionState::Fox(s) => s.as_u16(),
-        //}
+        match self {
+            SpecialActionState::Mario         (s) => s.as_u16(),
+            SpecialActionState::Fox           (s) => s.as_u16(),
+            SpecialActionState::CaptainFalcon (s) => s.as_u16(),
+            SpecialActionState::DonkeyKong    (s) => s.as_u16(),
+            SpecialActionState::Kirby         (s) => s.as_u16(),
+            SpecialActionState::Bowser        (s) => s.as_u16(),
+            SpecialActionState::Link          (s) => s.as_u16(),
+            SpecialActionState::Sheik         (s) => s.as_u16(),
+            SpecialActionState::Ness          (s) => s.as_u16(),
+            SpecialActionState::Peach         (s) => s.as_u16(),
+            SpecialActionState::IceClimbers   (s) => s.as_u16(),
+            SpecialActionState::Pikachu       (s) => s.as_u16(),
+            SpecialActionState::Samus         (s) => s.as_u16(),
+            SpecialActionState::Yoshi         (s) => s.as_u16(),
+            SpecialActionState::Jigglypuff    (s) => s.as_u16(),
+            SpecialActionState::Mewtwo        (s) => s.as_u16(),
+            SpecialActionState::Luigi         (s) => s.as_u16(),
+            SpecialActionState::Marth         (s) => s.as_u16(),
+            SpecialActionState::Zelda         (s) => s.as_u16(),
+            SpecialActionState::YoungLink     (s) => s.as_u16(),
+            SpecialActionState::DrMario       (s) => s.as_u16(),
+            SpecialActionState::Falco         (s) => s.as_u16(),
+            SpecialActionState::Pichu         (s) => s.as_u16(),
+            SpecialActionState::MrGameAndWatch(s) => s.as_u16(),
+            SpecialActionState::Ganondorf     (s) => s.as_u16(),
+            SpecialActionState::Roy           (s) => s.as_u16(),
+        }
     }
 }
 

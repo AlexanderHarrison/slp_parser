@@ -64,10 +64,13 @@ pub struct Frame {
     pub left_stick_coords: [f32; 2], // processed values
     pub right_stick_coords: [f32; 2],
 
+    pub hitstun_misc: f32, // char state var 1
     pub percent: f32,
     pub stock_count: u8,
     pub is_airborne: bool,
     pub hitlag_frames: f32,
+    pub last_ground_idx: u16,
+    pub state_flags: [u8; 5],
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]

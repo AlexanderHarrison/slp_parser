@@ -83,6 +83,9 @@ struct PostFrameInfo {
     pub percent: f32,
     pub is_airborne: bool,
     pub hitlag_frames: f32,
+    pub last_ground_idx: u16,
+    pub hitstun_misc: f32,
+    pub state_flags: [u8; 5],
 }
 
 fn merge_pre_post_frames(pre: PreFrameInfo, post: PostFrameInfo) -> Frame {
@@ -106,6 +109,9 @@ fn merge_pre_post_frames(pre: PreFrameInfo, post: PostFrameInfo) -> Frame {
         is_airborne: post.is_airborne,
         percent: post.percent,
         hitlag_frames: post.hitlag_frames,
+        last_ground_idx: post.last_ground_idx,
+        hitstun_misc: post.hitstun_misc,
+        state_flags: post.state_flags,
     }
 }
 
@@ -678,7 +684,10 @@ fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Po
     let stock_count = bytes[0x20];
     let anim_frame = f32::from_be_bytes(bytes[0x21..0x25].try_into().unwrap());
     let hitlag_frames = f32::from_be_bytes(bytes[0x48..0x4C].try_into().unwrap());
+    let hitstun_misc = f32::from_be_bytes(bytes[0x2A..0x2E].try_into().unwrap());
     let is_airborne = bytes[0x2E] == 1;
+    let last_ground_idx = u16::from_be_bytes(bytes[0x2F..0x31].try_into().unwrap());
+    let state_flags = bytes[0x25..0x2A].try_into().unwrap();
 
     Ok(PostFrameInfo {
         port_idx,
@@ -696,6 +705,9 @@ fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Po
         is_airborne,
         percent,
         hitlag_frames,
+        last_ground_idx,
+        hitstun_misc,
+        state_flags,
     })
 }
 
