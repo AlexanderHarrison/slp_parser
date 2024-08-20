@@ -451,7 +451,7 @@ impl fmt::Display for SlpError {
             SlpError::InvalidFile => "Invalid file.".to_owned(),
             SlpError::NotTwoPlayers => "File must be a two player match.".to_owned(),
             SlpError::UnimplementedCharacter(c) => format!(
-                "Character ({c}) is not yet implemented.",
+                "{c} is not yet implemented.",
             ),
             SlpError::FileDoesNotExist => "File does not exist.".to_owned(),
             SlpError::IOError => "Error reading file.".to_owned(),

@@ -73,7 +73,7 @@ pub fn decode_shift_jis(bytes: &[u8], buffer: &mut String) -> Option<u32> {
                 // would prefer to not have to pull in this dependency,
                 // but picori translates special characters into their fullwidth
                 // variants, so I use decancer to prune that.
-                // I could go through the generated tables to fix it but that is too much work.
+                // I could go through the generated tables to fix it, but that is too much work.
                 let options = decancer::Options::default().retain_japanese();
                 match decancer::cure_char(unsafe { char::from_u32_unchecked(value as u32) }, options) {
                     decancer::Translation::Character(c) => buffer.push(c),

@@ -301,12 +301,24 @@ pub fn write_notes(notes: &Notes) -> Vec<u8> {
     buf
 }
 
+fn unimplemented_character(c: Character) -> bool {
+    match c {
+        Character::Popo | Character::Nana => true,
+        _ => false,
+    }
+}
+
 pub fn parse_file(stream: &mut Stream) -> SlpResult<(Game, Notes)> {
     let raw_len = skip_raw_header(stream)?;
     let metadata_bytes = &stream.as_slice()[raw_len as usize..];
 
     let stream_info = parse_event_payloads(stream)?;
     let game_start_info = parse_game_start(stream, &stream_info)?;
+
+    let low_char = game_start_info.low_starting_character.character();
+    let high_char = game_start_info.low_starting_character.character();
+    if unimplemented_character(low_char) { return Err(SlpError::UnimplementedCharacter(low_char)) }
+    if unimplemented_character(high_char) { return Err(SlpError::UnimplementedCharacter(high_char)) }
 
     let mut low_port_frames = Vec::new();
     let mut high_port_frames = Vec::new();

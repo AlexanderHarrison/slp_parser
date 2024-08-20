@@ -1,5 +1,5 @@
 use crate::{Action, BroadState, SpecialBroadState, ActionState, SpecialActionState, 
-    SpecialHighLevelAction, SlpError, SlpResult, Character, JumpType, ParseError, 
+    SpecialHighLevelAction, SlpError, SlpResult, JumpType, ParseError, 
     ActionBuilder, HighLevelAction};
 use std::fmt;
 
@@ -8,20 +8,6 @@ use std::fmt;
 // copy action state names and indicies
 // fill out action state and hla enum names
 // fill out anim map in arwing
-
-pub fn implemented_character(c: Character) -> bool {
-    match c {
-        Character::Fox
-        | Character::Falco
-        | Character::Marth
-        | Character::Peach
-        | Character::Sheik
-        | Character::Samus
-        | Character::Jigglypuff
-        | Character::CaptainFalcon => true,
-        _ => false,
-    }
-}
 
 macro_rules! parse_fn {
     ($char:ident, $sbs:ident, $shla:ident, $bsnm:ident, $consumer:ident, ParseAll) => {{

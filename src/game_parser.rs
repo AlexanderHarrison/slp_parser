@@ -130,6 +130,7 @@ impl Action {
 
         match state {
             Attack => Action::parse_attack(consumer),
+            Dead => Action::parse_simple_action(consumer, Dead.into(), HighLevelAction::Dead),
             Air => Action::parse_courtesy(consumer, Action::AIR_COURTESY, HighLevelAction::AirWait),
             Airdodge => Action::parse_airdodge(consumer),
             SpecialLanding => {

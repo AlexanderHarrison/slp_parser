@@ -17,6 +17,7 @@ pub enum BroadState {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum StandardBroadState {
+    Dead,
     Attack,
     Air,
     Airdodge,
@@ -42,6 +43,7 @@ pub enum StandardBroadState {
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u8)]
 pub enum HighLevelAction {
+    Dead,
     GroundAttack(GroundAttack),
     Aerial(AirAttack),
     JumpAerial(AirAttack),
@@ -238,6 +240,16 @@ impl Into<HighLevelAction> for SpecialHighLevelAction {
     }
 }
 
+impl StandardBroadState {
+    pub fn is_actionable(self) -> bool {
+        use StandardBroadState as SBS;
+
+        match self {
+            SBS::Air | SBS::Ground | SBS::Walk | SBS::DashRun | SBS::Shield | SBS::Ledge | SBS::AirJump | SBS::Crouch => true,
+            _ => false,
+        }
+    }
+}
 
 impl StandardActionState {
     pub fn from_u16(st: u16) -> SlpResult<Self> {
@@ -310,19 +322,19 @@ impl StandardActionState {
         }
 
         static LOOKUP: [StandardBroadState; 341] = [
-            GenericInactionable, //           DeadDown
-            GenericInactionable, //           DeadLeft
-            GenericInactionable, //           DeadRight
-            GenericInactionable, //           DeadUp
-            GenericInactionable, //           DeadUpStar
-            GenericInactionable, //           DeadUpStarIce
-            GenericInactionable, //           DeadUpFall
-            GenericInactionable, //           DeadUpFallHitCamera
-            GenericInactionable, //           DeadUpFallHitCameraFlat
-            GenericInactionable, //           DeadUpFallIce
-            GenericInactionable, //           DeadUpFallHitCameraIce
-            GenericInactionable, //           Sleep
-            GenericInactionable, //           Rebirth
+            Dead, //           DeadDown
+            Dead, //           DeadLeft
+            Dead, //           DeadRight
+            Dead, //           DeadUp
+            Dead, //           DeadUpStar
+            Dead, //           DeadUpStarIce
+            Dead, //           DeadUpFall
+            Dead, //           DeadUpFallHitCamera
+            Dead, //           DeadUpFallHitCameraFlat
+            Dead, //           DeadUpFallIce
+            Dead, //           DeadUpFallHitCameraIce
+            Dead, //           Sleep
+            Dead, //           Rebirth
             Air,                 //           RebirthWait
             Ground,              //           Wait
             Walk,                //           WalkSlow
@@ -1724,7 +1736,9 @@ impl HighLevelAction {
             HLA::Crouch => 62,
             HLA::Hitstun => 63,
             HLA::Walljump => 64,
-            HLA::Special(s) => 64 + s.as_u16(), // TODO not backwards compatible
+            HLA::Dead => 65,
+
+            HLA::Special(s) => 66 + s.as_u16(), // TODO not backwards compatible
         }
     }
 }
@@ -1755,6 +1769,7 @@ impl fmt::Display for StandardBroadState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use StandardBroadState as SBS;
         match self {
+            SBS::Dead                => write!(f, "Dead"),
             SBS::Attack              => write!(f, "Attack"),
             SBS::Air                 => write!(f, "Air"),
             SBS::Airdodge            => write!(f, "Airdodge"),
@@ -1815,6 +1830,7 @@ impl fmt::Display for HighLevelAction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use HighLevelAction::*;
         match self {
+            Dead => write!(f, "Dead"),
             GroundAttack(at) => write!(f, "{}", at),
             Aerial(at) => write!(f, "{}", at),
             JumpAerial(at) => write!(f, "{}", at),
