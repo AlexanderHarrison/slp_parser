@@ -30,9 +30,9 @@ struct StreamInfo {
 
 impl StreamInfo {
     pub fn create_event_stream<'a>(&self, code: u8, stream: &mut Stream<'a>) -> SlpResult<SubStream<'a>> {
-        let sub_size = self.event_payload_sizes[code as usize];
-        if sub_size == 0 { return Err(SlpError::InvalidFile) }
-        Ok(stream.sub_stream(sub_size as usize))
+        let sub_size = self.event_payload_sizes[code as usize] as usize;
+        if sub_size == 0 || stream.bytes.len() < sub_size { return Err(SlpError::InvalidFile) }
+        Ok(stream.sub_stream(sub_size))
     }
 
     pub fn skip_event<'a>(&self, code: u8, stream: &mut Stream<'a>) -> SlpResult<()> {
@@ -316,7 +316,7 @@ pub fn parse_file(stream: &mut Stream) -> SlpResult<(Game, Notes)> {
     let game_start_info = parse_game_start(stream, &stream_info)?;
 
     let low_char = game_start_info.low_starting_character.character();
-    let high_char = game_start_info.low_starting_character.character();
+    let high_char = game_start_info.high_starting_character.character();
     if unimplemented_character(low_char) { return Err(SlpError::UnimplementedCharacter(low_char)) }
     if unimplemented_character(high_char) { return Err(SlpError::UnimplementedCharacter(high_char)) }
 
