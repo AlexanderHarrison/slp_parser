@@ -20,9 +20,11 @@ pub type SlpResult<T> = Result<T, SlpError>;
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum SlpError {
     OutdatedFile,
+    TooNewFile,
     InvalidFile,
     NotTwoPlayers,
     UnimplementedCharacter(Character),
+    ZstdInitError,
 
     FileDoesNotExist,
     IOError,
@@ -200,6 +202,7 @@ pub struct Folder {
     
 #[derive(Clone, Debug)]
 pub struct SlpDirectoryInfo {
+    /// Will contain slpz files as well as slp files. Check the extension.
     pub slp_files: Vec<SlpFileInfo>,
     pub folders: Vec<Folder>,
     pub dir_hash: u64,
@@ -208,6 +211,7 @@ pub struct SlpDirectoryInfo {
 #[derive(Copy, Clone, Debug)]
 enum SlpDirEntryType {
     SlpFile,
+    SlpzFile,
     Directory,
     Other,
 }
@@ -216,8 +220,11 @@ fn entry_type(entry: &std::fs::DirEntry) -> SlpResult<SlpDirEntryType> {
     let file_type = entry.file_type().map_err(|_| SlpError::IOError)?;
     if file_type.is_file() {
         let path = entry.path();
-        if path.extension() == Some(std::ffi::OsStr::new("slp")) {
+        let ex = path.extension();
+        if ex == Some(std::ffi::OsStr::new("slp")) {
             Ok(SlpDirEntryType::SlpFile)
+        } else if ex == Some(std::ffi::OsStr::new("slpz")) {
+            Ok(SlpDirEntryType::SlpzFile)
         } else {
             Ok(SlpDirEntryType::Other)
         }
@@ -242,7 +249,7 @@ pub fn read_info_in_dir(
     for entry in std::fs::read_dir(path).map_err(|_| SlpError::IOError)? {
         let entry = entry.map_err(|_| SlpError::IOError)?;
         match entry_type(&entry)? {
-            SlpDirEntryType::SlpFile => {
+            SlpDirEntryType::SlpFile | SlpDirEntryType::SlpzFile => {
                 let game_path = entry.path();
                 hash ^= simple_hash(game_path.as_os_str().as_encoded_bytes());
 
@@ -270,8 +277,7 @@ pub fn read_info_in_dir(
         }
     }
 
-    eprintln!("skipped {} slp files", skipped);
-
+    eprintln!("skipped {} files", skipped);
     prev.dir_hash = hash;
 
     Ok(())
@@ -283,7 +289,7 @@ pub fn dir_hash(path: impl AsRef<Path>) -> SlpResult<u64> {
     for entry in std::fs::read_dir(path).map_err(|_| SlpError::IOError)? {
         let entry = entry.map_err(|_| SlpError::IOError)?;
         match entry_type(&entry)? {
-            SlpDirEntryType::SlpFile => {
+            SlpDirEntryType::SlpFile | SlpDirEntryType::SlpzFile => {
                 let game_path = entry.path();
                 hash ^= simple_hash(game_path.as_os_str().as_encoded_bytes());
             }
@@ -291,7 +297,7 @@ pub fn dir_hash(path: impl AsRef<Path>) -> SlpResult<u64> {
                 let folder_path = entry.path();
                 hash ^= simple_hash(folder_path.as_os_str().as_encoded_bytes());
             }
-            _ => (),
+            SlpDirEntryType::Other => (),
         }
     }
     
@@ -317,8 +323,16 @@ fn simple_hash(bytes: &[u8]) -> u64 {
 
 
 pub fn read_info(path: &Path) -> SlpResult<GameInfo> {
-    let mut file = std::fs::File::open(path).map_err(|_| SlpError::FileDoesNotExist)?;
-    let info = file_parser::parse_file_info(&mut file)?;
+    let ex = path.extension();
+
+    let info = if ex != Some(std::ffi::OsStr::new("slpz")) {
+        let mut file = std::fs::File::open(path).map_err(|_| SlpError::FileDoesNotExist)?;
+        file_parser::parse_file_info(&mut file)?
+    } else {
+        let mut file = std::fs::File::open(path).map_err(|_| SlpError::FileDoesNotExist)?;
+        file_parser::parse_file_info_slpz(&mut file)?
+    };
+
     Ok(info)
 }
 
@@ -329,7 +343,13 @@ pub fn read_game(path: &Path) -> SlpResult<(Game, Notes)> {
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).unwrap();
 
-    let game = file_parser::parse_file(&mut file_parser::Stream::new(&buf))?;
+    let ex = path.extension();
+    let game = if ex != Some(std::ffi::OsStr::new("slpz")) {
+        file_parser::parse_file(&mut file_parser::Stream::new(&buf))?
+    } else {
+        file_parser::parse_file_slpz(&mut file_parser::Stream::new(&buf))?
+    };
+
     Ok(game)
 }
 
@@ -444,12 +464,14 @@ impl fmt::Display for SlpError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", match self {
             SlpError::OutdatedFile => format!(
-                "Outdated file. A version >= {}.{}.0 is required.",
+                "Outdated slp file. A version >= {}.{}.0 is required.",
                 MIN_VERSION_MAJOR,
                 MIN_VERSION_MINOR,
             ),
+            SlpError::TooNewFile => "Slp file is too new and unsupported.".to_owned(),
             SlpError::InvalidFile => "Invalid file.".to_owned(),
             SlpError::NotTwoPlayers => "File must be a two player match.".to_owned(),
+            SlpError::ZstdInitError => "Failed to init zstd.".to_owned(),
             SlpError::UnimplementedCharacter(c) => format!(
                 "{c} is not yet implemented.",
             ),

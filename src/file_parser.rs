@@ -22,7 +22,7 @@ const STADIUM_INFO:         u8 = 0x41;
 pub const MIN_VERSION_MAJOR: u8 = 3;
 pub const MIN_VERSION_MINOR: u8 = 13;
 
-pub const HEADER_LEN: u64 = 14;
+pub const HEADER_LEN: u64 = 15;
 
 struct StreamInfo {
     pub event_payload_sizes: [u16; 255],  
@@ -126,7 +126,7 @@ pub fn parse_file_info(reader: &mut (impl std::io::Read + std::io::Seek)) -> Slp
     while read_count < 1024 {
         let read = reader.read(&mut buf[read_count..])
             .map_err(|_| SlpError::IOError)?;
-        if read == 0 { break } // file smaller than 1024 somehow
+        if read == 0 { break } // file smaller than buffer
         read_count += read;
     }
 
@@ -145,6 +145,48 @@ pub fn parse_file_info(reader: &mut (impl std::io::Read + std::io::Seek)) -> Slp
 
     Ok(merge_metadata(game_start_info, metadata))
 }
+
+pub fn parse_file_info_slpz(reader: &mut (impl std::io::Read + std::io::Seek)) -> SlpResult<GameInfo> {
+    let mut buf = [0u8; 4096];
+    
+    let mut read_count = reader.read(&mut buf)
+        .map_err(|_| SlpError::IOError)?;
+
+    // unlikely
+    while read_count < 24 {
+        let read = reader.read(&mut buf[read_count..])
+            .map_err(|_| SlpError::IOError)?;
+        if read == 0 { break } // file smaller than buffer
+        read_count += read;
+    }
+
+    let version = read_u32(&buf[0..]);
+    if version > 0 { return Err(SlpError::TooNewFile) }
+
+    let event_sizes_offset = read_u32(&buf[4..]) as usize;
+    let game_start_offset = read_u32(&buf[8..]) as usize;
+    let metadata_offset = read_u32(&buf[12..]) as usize;
+    let compressed_events_offset = read_u32(&buf[16..]) as usize;
+
+    // TODO
+    assert!(compressed_events_offset < 4096);
+
+    while read_count < compressed_events_offset {
+        let read = reader.read(&mut buf[read_count..]) .map_err(|_| SlpError::IOError)?;
+        if read == 0 { break } // file smaller than buffer
+        read_count += read;
+    }
+
+    let stream_info = parse_event_payloads(&mut Stream::new(&buf[event_sizes_offset..game_start_offset]))?;
+    let game_start_info = parse_game_start(
+        &mut Stream::new(&buf[game_start_offset..metadata_offset]), 
+        &stream_info
+    )?;
+    let metadata = parse_metadata(&buf[metadata_offset..compressed_events_offset]);
+
+    Ok(merge_metadata(game_start_info, metadata))
+}
+
 
 fn merge_metadata(game_start_info: GameStartInfo, metadata: Metadata) -> GameInfo {
     GameInfo {
@@ -480,6 +522,12 @@ pub fn parse_file(stream: &mut Stream) -> SlpResult<(Game, Notes)> {
         info: merge_metadata(game_start_info, metadata),
         stage_info,
     }, notes))
+}
+
+pub fn parse_file_slpz(stream: &mut Stream) -> SlpResult<(Game, Notes)> {
+    let mut decompressor = slpz::Decompressor::new().ok_or(SlpError::ZstdInitError)?;
+    let slp = slpz::decompress(&mut decompressor, stream.bytes).map_err(|_| SlpError::InvalidFile)?;
+    parse_file(&mut Stream::new(&slp))
 }
 
 pub fn skip_raw_header(stream: &mut Stream) -> SlpResult<u32> {
@@ -820,3 +868,5 @@ impl<'a> Stream<'a> {
         }
     }
 }
+
+fn read_u32(b: &[u8]) -> u32 { u32::from_be_bytes(b[0..4].try_into().unwrap()) }

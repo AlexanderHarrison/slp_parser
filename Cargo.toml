@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 decancer = "3.2"
+slpz = "1.0.0"
 
 [profile.release]
 debug=true
