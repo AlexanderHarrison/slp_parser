@@ -13,6 +13,8 @@ const FOD_INFO:             u8 = 0x3F;
 const DREAMLAND_INFO:       u8 = 0x40;
 const STADIUM_INFO:         u8 = 0x41;
 
+pub const MAX_SUPPORTED_SLPZ_VERSION: u32 = 0;
+
 //const GECKO_LIST:           u8 = 0x3D;
 
 // TODO not make such a mess
@@ -119,13 +121,11 @@ fn merge_pre_post_frames(pre: PreFrameInfo, post: PostFrameInfo) -> Frame {
 pub fn parse_file_info(reader: &mut (impl std::io::Read + std::io::Seek)) -> SlpResult<GameInfo> {
     let mut buf = [0u8; 1024];
     
-    let mut read_count = reader.read(&mut buf)
-        .map_err(|_| SlpError::IOError)?;
+    let mut read_count = reader.read(&mut buf)?;
 
     // unlikely
     while read_count < 1024 {
-        let read = reader.read(&mut buf[read_count..])
-            .map_err(|_| SlpError::IOError)?;
+        let read = reader.read(&mut buf[read_count..])?;
         if read == 0 { break } // file smaller than buffer
         read_count += read;
     }
@@ -136,10 +136,8 @@ pub fn parse_file_info(reader: &mut (impl std::io::Read + std::io::Seek)) -> Slp
     let stream_info = parse_event_payloads(&mut stream)?;
     let game_start_info = parse_game_start(&mut stream, &stream_info)?;
 
-    reader.seek(std::io::SeekFrom::Start(HEADER_LEN + raw_len as u64))
-        .map_err(|_| SlpError::IOError)?;
-    let read_count = reader.read(&mut buf)
-        .map_err(|_| SlpError::IOError)?;
+    reader.seek(std::io::SeekFrom::Start(HEADER_LEN + raw_len as u64))?;
+    let read_count = reader.read(&mut buf)?;
 
     let metadata = parse_metadata(&buf[..read_count]);
 
@@ -149,19 +147,17 @@ pub fn parse_file_info(reader: &mut (impl std::io::Read + std::io::Seek)) -> Slp
 pub fn parse_file_info_slpz(reader: &mut (impl std::io::Read + std::io::Seek)) -> SlpResult<GameInfo> {
     let mut buf = [0u8; 4096];
     
-    let mut read_count = reader.read(&mut buf)
-        .map_err(|_| SlpError::IOError)?;
+    let mut read_count = reader.read(&mut buf)?;
 
     // unlikely
     while read_count < 24 {
-        let read = reader.read(&mut buf[read_count..])
-            .map_err(|_| SlpError::IOError)?;
+        let read = reader.read(&mut buf[read_count..])?;
         if read == 0 { break } // file smaller than buffer
         read_count += read;
     }
 
     let version = read_u32(&buf[0..]);
-    if version > 0 { return Err(SlpError::TooNewFile) }
+    if version > MAX_SUPPORTED_SLPZ_VERSION { return Err(SlpError::TooNewFile) }
 
     let event_sizes_offset = read_u32(&buf[4..]) as usize;
     let game_start_offset = read_u32(&buf[8..]) as usize;
@@ -172,7 +168,7 @@ pub fn parse_file_info_slpz(reader: &mut (impl std::io::Read + std::io::Seek)) -
     assert!(compressed_events_offset < 4096);
 
     while read_count < compressed_events_offset {
-        let read = reader.read(&mut buf[read_count..]) .map_err(|_| SlpError::IOError)?;
+        let read = reader.read(&mut buf[read_count..])?;
         if read == 0 { break } // file smaller than buffer
         read_count += read;
     }
@@ -288,9 +284,7 @@ pub fn parse_notes(metadata: &[u8]) -> Notes {
 }
 
 /// writes in ubjson format
-pub fn write_notes(notes: &Notes) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(64);
-    let buffer = &mut buf;
+pub fn write_notes(buffer: &mut Vec<u8>, notes: &Notes) {
     fn write_u8(buffer: &mut Vec<u8>, n: u8) {
         buffer.push(b'U');
         buffer.push(n);
@@ -339,8 +333,6 @@ pub fn write_notes(notes: &Notes) -> Vec<u8> {
     buffer.push(b']');
 
     buffer.push(b'}');
-
-    buf
 }
 
 fn unimplemented_character(c: Character) -> bool {

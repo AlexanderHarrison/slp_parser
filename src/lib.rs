@@ -30,6 +30,10 @@ pub enum SlpError {
     IOError,
 }
 
+impl From<std::io::Error> for SlpError {
+    fn from(_: std::io::Error) -> SlpError { SlpError::IOError }
+}
+
 #[derive(Clone, Debug)]
 pub struct Action {
     pub start_state: BroadState,
@@ -217,7 +221,7 @@ enum SlpDirEntryType {
 }
 
 fn entry_type(entry: &std::fs::DirEntry) -> SlpResult<SlpDirEntryType> {
-    let file_type = entry.file_type().map_err(|_| SlpError::IOError)?;
+    let file_type = entry.file_type()?;
     if file_type.is_file() {
         let path = entry.path();
         let ex = path.extension();
@@ -246,8 +250,8 @@ pub fn read_info_in_dir(
 
     let mut skipped = 0usize;
 
-    for entry in std::fs::read_dir(path).map_err(|_| SlpError::IOError)? {
-        let entry = entry.map_err(|_| SlpError::IOError)?;
+    for entry in std::fs::read_dir(path)? {
+        let entry = entry?;
         match entry_type(&entry)? {
             SlpDirEntryType::SlpFile | SlpDirEntryType::SlpzFile => {
                 let game_path = entry.path();
@@ -286,8 +290,8 @@ pub fn read_info_in_dir(
 pub fn dir_hash(path: impl AsRef<Path>) -> SlpResult<u64> {
     let mut hash = 0;
 
-    for entry in std::fs::read_dir(path).map_err(|_| SlpError::IOError)? {
-        let entry = entry.map_err(|_| SlpError::IOError)?;
+    for entry in std::fs::read_dir(path)? {
+        let entry = entry?;
         match entry_type(&entry)? {
             SlpDirEntryType::SlpFile | SlpDirEntryType::SlpzFile => {
                 let game_path = entry.path();
@@ -353,44 +357,85 @@ pub fn read_game(path: &Path) -> SlpResult<(Game, Notes)> {
     Ok(game)
 }
 
+pub fn alter_notes(metadata: &mut Vec<u8>, notes: &Notes) {
+    let write_i = metadata
+        .windows(5)
+        .position(|w| w == b"notes")
+        .unwrap_or(metadata.len()-1);
+
+    metadata.resize(write_i, 0u8);
+    write_notes(metadata, notes);
+
+    // previously overwritten
+    metadata.push(b'}');
+}
+
 // TODO do not truncate metadata after notes
 pub fn write_notes_to_game(path: &Path, notes: &Notes) -> SlpResult<()> {
     use std::io::{Read, Write, Seek};
+
     let mut file = std::fs::OpenOptions::new().write(true).read(true)
         .open(path).map_err(|_| SlpError::FileDoesNotExist)?;
 
-    let mut buf = [0u8; 1024];
-    let mut read_count = file.read(&mut buf)
-        .map_err(|_| SlpError::IOError)?;
+    if path.extension() != Some(std::ffi::OsStr::new("slpz")) {
+        // slp file
 
-    // unlikely
-    while read_count < 1024 {
-        let read = file.read(&mut buf[read_count..])
-            .map_err(|_| SlpError::IOError)?;
-        if read == 0 { break } // file smaller than 1024 somehow
-        read_count += read;
-    }
+        let mut buf = [0u8; 1024];
+        let mut read_count = file.read(&mut buf)?;
 
-    let mut stream = Stream::new(&buf[0..read_count]);
+        // unlikely
+        while read_count < 1024 {
+            let read = file.read(&mut buf[read_count..])?;
+            if read == 0 { break } // file smaller than buffer
+            read_count += read;
+        }
 
-    let raw_len = skip_raw_header(&mut stream)?;
+        let mut stream = Stream::new(&buf[0..read_count]);
+        let raw_len = skip_raw_header(&mut stream)?;
 
-    file.seek(std::io::SeekFrom::Start(HEADER_LEN + raw_len as u64)).map_err(|_| SlpError::IOError)?;
-    let read_count = file.read(&mut buf).map_err(|_| SlpError::IOError)?;
+        let mut metadata = Vec::new();
+        file.seek(std::io::SeekFrom::Start(HEADER_LEN + raw_len as u64))?;
+        file.read_to_end(&mut metadata)?;
 
-    if let Some(prev_notes_i) = buf[..read_count].windows(5).position(|w| w == b"notes") {
-        let pos = -(read_count as i64) + prev_notes_i as i64 - 2 as i64;
-        file.seek(std::io::SeekFrom::Current(pos)).map_err(|_| SlpError::IOError)?;
+        alter_notes(&mut metadata, notes);
+
+        file.seek(std::io::SeekFrom::Start(HEADER_LEN + raw_len as u64))?;
+        file.write_all(metadata.as_slice())?;
+
+        // remove not overwritten metadata
+        let pos = file.stream_position()?;
+        file.set_len(pos)?;
     } else {
-        file.seek(std::io::SeekFrom::End(-1)).map_err(|_| SlpError::IOError)?;
-    }
+        // slpz file
 
-    let mut note_bytes = write_notes(notes);
-    // overwritten
-    note_bytes.push(b'}');
-    file.write_all(&note_bytes).map_err(|_| SlpError::IOError)?;
-    let pos = file.stream_position().map_err(|_| SlpError::IOError)?;
-    file.set_len(pos).map_err(|_| SlpError::IOError)?;
+        let mut header = [0u8; 24];
+        file.read_exact(&mut header)?;
+
+        let version = read_u32(&header[0..]);
+        if version > file_parser::MAX_SUPPORTED_SLPZ_VERSION { return Err(SlpError::TooNewFile) }
+
+        let metadata_offset = read_u32(&header[12..]) as usize;
+        let compressed_events_offset = read_u32(&header[16..]) as usize;
+
+        let metadata_len = compressed_events_offset - metadata_offset;
+        let mut metadata = vec![0u8; metadata_len];
+        file.seek(std::io::SeekFrom::Start(metadata_offset as u64))?;
+        file.read_exact(metadata.as_mut_slice())?;
+
+        let mut events = Vec::new();
+        file.seek(std::io::SeekFrom::Start(compressed_events_offset as u64))?;
+        file.read_to_end(&mut events)?;
+
+        alter_notes(&mut metadata, notes);
+        
+        file.seek(std::io::SeekFrom::Start(metadata_offset as u64))?;
+        file.write_all(metadata.as_slice())?;
+        file.write_all(events.as_slice())?;
+
+        let new_compressed_offset = (metadata_offset + metadata.len()) as u32;
+        file.seek(std::io::SeekFrom::Start(16))?;
+        file.write_all(&new_compressed_offset.to_be_bytes())?;
+    }
 
     Ok(())
 }
@@ -400,7 +445,7 @@ pub fn parse_game(game: &Path, port: Port) -> SlpResult<Box<[Action]>> {
 
     let mut file = std::fs::File::open(game).map_err(|_| SlpError::FileDoesNotExist)?;
     let mut buf = Vec::new();
-    file.read_to_end(&mut buf).map_err(|_| SlpError::IOError)?;
+    file.read_to_end(&mut buf)?;
 
     parse_buf(&buf, port)
 }
@@ -534,3 +579,5 @@ impl From<TimeFields> for Time {
         Time(time)
     }
 }
+
+fn read_u32(b: &[u8]) -> u32 { u32::from_be_bytes(b[0..4].try_into().unwrap()) }
