@@ -93,7 +93,8 @@ pub struct Item {
     pub owner: i8,
 }
 
-// requires parsing metadata
+/// Names and codes are null terminated Shift JIS strings. 
+/// They are zeroes if played on console.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct GameInfo {
     pub stage: Stage,
@@ -103,16 +104,14 @@ pub struct GameInfo {
     pub high_starting_character: CharacterColour,
     pub start_time: Time,
     pub duration: u32,
-
-    // null terminated Shift JIS strings. zero length if does not exist
     pub low_name: [u8; 32],
     pub high_name: [u8; 32],
-
-    // null terminated Shift JIS strings. zero length if does not exist
     pub low_connect_code: [u8; 10],
     pub high_connect_code: [u8; 10],
 }
 
+/// Names and codes are null terminated Shift JIS strings. 
+/// They are zeroes if played on console.
 #[derive(Copy, Clone, Debug)]
 pub struct GameStartInfo {
     pub stage: Stage,
@@ -120,12 +119,8 @@ pub struct GameStartInfo {
     pub low_starting_character: CharacterColour,
     pub high_port_idx: u8,
     pub high_starting_character: CharacterColour,
-
-    // null terminated Shift JIS strings. zero length if does not exist
     pub low_name: [u8; 32],
     pub high_name: [u8; 32],
-
-    // null terminated Shift JIS strings. zero length if does not exist
     pub low_connect_code: [u8; 10],
     pub high_connect_code: [u8; 10],
 }
