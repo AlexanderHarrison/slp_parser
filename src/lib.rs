@@ -367,12 +367,15 @@ pub fn alter_notes(metadata: &mut Vec<u8>, notes: &Notes) {
 
 // TODO do not truncate metadata after notes
 pub fn write_notes_to_game(path: &Path, notes: &Notes) -> SlpResult<()> {
+    println!("start notes write");
     use std::io::{Read, Write, Seek};
 
     let mut file = std::fs::OpenOptions::new().write(true).read(true)
         .open(path).map_err(|_| SlpError::FileDoesNotExist)?;
+    println!("open");
 
     if path.extension() != Some(std::ffi::OsStr::new("slpz")) {
+        println!("slp file");
         // slp file
 
         let mut buf = [0u8; 1024];
@@ -401,6 +404,7 @@ pub fn write_notes_to_game(path: &Path, notes: &Notes) -> SlpResult<()> {
         let pos = file.stream_position()?;
         file.set_len(pos)?;
     } else {
+        println!("slpz file");
         // slpz file
 
         let mut header = [0u8; 24];
@@ -411,25 +415,36 @@ pub fn write_notes_to_game(path: &Path, notes: &Notes) -> SlpResult<()> {
 
         let metadata_offset = read_u32(&header[12..]) as usize;
         let compressed_events_offset = read_u32(&header[16..]) as usize;
+        println!("meta offset: {}", metadata_offset);
+        println!("events offset: {}", compressed_events_offset);
+        println!("read header");
 
         let metadata_len = compressed_events_offset - metadata_offset;
         let mut metadata = vec![0u8; metadata_len];
         file.seek(std::io::SeekFrom::Start(metadata_offset as u64))?;
         file.read_exact(metadata.as_mut_slice())?;
+        println!("read metadata");
 
         let mut events = Vec::new();
         file.seek(std::io::SeekFrom::Start(compressed_events_offset as u64))?;
         file.read_to_end(&mut events)?;
+        println!("read events");
 
+        println!("old meta len: {}", metadata.len());
         alter_notes(&mut metadata, notes);
+        println!("new meta len: {}", metadata.len());
         
         file.seek(std::io::SeekFrom::Start(metadata_offset as u64))?;
         file.write_all(metadata.as_slice())?;
+        println!("wrote metadata");
         file.write_all(events.as_slice())?;
+        println!("wrote events");
 
         let new_compressed_offset = (metadata_offset + metadata.len()) as u32;
+        println!("events offset new: {}", new_compressed_offset);
         file.seek(std::io::SeekFrom::Start(16))?;
         file.write_all(&new_compressed_offset.to_be_bytes())?;
+        println!("wrote header");
     }
 
     Ok(())
