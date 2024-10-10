@@ -604,7 +604,6 @@ fn parse_game_start(stream: &mut Stream, info: &StreamInfo) -> SlpResult<GameSta
 }
 
 fn parse_timestamp(timestamp: &[u8]) -> SlpResult<Time> {
-    println!("{}", std::str::from_utf8(timestamp).unwrap());
     // 2023-10-04T03:43:00.64-0
     // 2018-06-22T07:52:59Z
   
