@@ -604,6 +604,7 @@ fn parse_game_start(stream: &mut Stream, info: &StreamInfo) -> SlpResult<GameSta
 }
 
 fn parse_timestamp(timestamp: &[u8]) -> SlpResult<Time> {
+    println!("{}", std::str::from_utf8(timestamp).unwrap());
     // 2023-10-04T03:43:00.64-0
     // 2018-06-22T07:52:59Z
   
@@ -612,7 +613,7 @@ fn parse_timestamp(timestamp: &[u8]) -> SlpResult<Time> {
 
     if timestamp.len() < 19 { return Err(SlpError::InvalidFile) }
 
-    let d1 = conv(timestamp[0]  ) as u16;
+    let d1 = conv(timestamp[0]) as u16;
     let d2 = conv(timestamp[1]) as u16;
     let d3 = conv(timestamp[2]) as u16;
     let d4 = conv(timestamp[3]) as u16;
