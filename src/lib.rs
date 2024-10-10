@@ -95,7 +95,7 @@ pub struct Item {
 
 /// Names and codes are null terminated Shift JIS strings. 
 /// They are zeroes if played on console.
-#[derive(Hash, Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct GameInfo {
     pub stage: Stage,
     pub low_port_idx: u8,
