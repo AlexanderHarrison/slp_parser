@@ -95,7 +95,7 @@ pub struct Item {
 
 /// Names and codes are null terminated Shift JIS strings. 
 /// They are zeroes if played on console.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Hash, Copy, Clone, Debug, PartialEq, Eq)]
 pub struct GameInfo {
     pub stage: Stage,
     pub low_port_idx: u8,
@@ -540,7 +540,7 @@ pub enum Direction {
 
 // zero if invalid time
 #[derive(Copy, Clone, Debug, PartialOrd, Ord, Eq, PartialEq)]
-pub struct Time(u64);
+pub struct Time(pub u64);
 impl Time { pub const NULL: Time = Time(0); }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
