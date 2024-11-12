@@ -22,7 +22,7 @@ pub const MAX_SUPPORTED_SLPZ_VERSION: u32 = 0;
 // - fix ambiguous command byte + weird byte offsets
 
 pub const MIN_VERSION_MAJOR: u8 = 3;
-pub const MIN_VERSION_MINOR: u8 = 13;
+pub const MIN_VERSION_MINOR: u8 = 16;
 
 pub const HEADER_LEN: u64 = 15;
 
