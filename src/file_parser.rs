@@ -89,7 +89,7 @@ struct PostFrameInfo {
     pub hitstun_misc: f32,
     pub state_flags: [u8; 5],
     pub last_hitting_attack_id: u16,
-    pub last_hitting_instance_id: u16,
+    pub last_hit_by_instance_id: u16,
 }
 
 fn merge_pre_post_frames(pre: PreFrameInfo, post: PostFrameInfo) -> Frame {
@@ -117,7 +117,7 @@ fn merge_pre_post_frames(pre: PreFrameInfo, post: PostFrameInfo) -> Frame {
         hitstun_misc: post.hitstun_misc,
         state_flags: post.state_flags,
         last_hitting_attack_id: post.last_hitting_attack_id,
-        last_hitting_instance_id: post.last_hitting_instance_id,
+        last_hit_by_instance_id: post.last_hit_by_instance_id,
     }
 }
 
@@ -745,7 +745,7 @@ fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Po
     let is_airborne = bytes[0x2E] == 1;
     let last_ground_idx = u16::from_be_bytes(bytes[0x2F..0x31].try_into().unwrap());
     let state_flags = bytes[0x25..0x2A].try_into().unwrap();
-    let last_hitting_instance_id = u16::from_be_bytes(bytes[0x50..0x52].try_into().unwrap());
+    let last_hit_by_instance_id = u16::from_be_bytes(bytes[0x50..0x52].try_into().unwrap());
 
     Ok(PostFrameInfo {
         port_idx,
@@ -767,7 +767,7 @@ fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Po
         hitstun_misc,
         state_flags,
         last_hitting_attack_id,
-        last_hitting_instance_id,
+        last_hit_by_instance_id,
     })
 }
 
