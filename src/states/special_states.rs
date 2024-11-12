@@ -1041,7 +1041,7 @@ special_states! {
         EggLayAirCaptureStart        = 352 => Todo, "Todo",
         Unknown353                   = 353 => Todo, "Todo",
         EggLayAirCapture             = 354 => Todo, "Todo",
-        Unknown                      = 355 => Todo, "Todo",
+        Unknown355                   = 355 => Todo, "Todo",
         EggRollGroundStartup         = 356 => Todo, "Todo",
         EggRollGround                = 357 => Todo, "Todo",
         EggRollGroundChangeDirection = 358 => Todo, "Todo",

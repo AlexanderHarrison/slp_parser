@@ -88,6 +88,8 @@ struct PostFrameInfo {
     pub last_ground_idx: u16,
     pub hitstun_misc: f32,
     pub state_flags: [u8; 5],
+    pub last_hitting_attack_id: u16,
+    pub last_hitting_instance_id: u16,
 }
 
 fn merge_pre_post_frames(pre: PreFrameInfo, post: PostFrameInfo) -> Frame {
@@ -114,6 +116,8 @@ fn merge_pre_post_frames(pre: PreFrameInfo, post: PostFrameInfo) -> Frame {
         last_ground_idx: post.last_ground_idx,
         hitstun_misc: post.hitstun_misc,
         state_flags: post.state_flags,
+        last_hitting_attack_id: post.last_hitting_attack_id,
+        last_hitting_instance_id: post.last_hitting_instance_id,
     }
 }
 
@@ -733,6 +737,7 @@ fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Po
     let state = ActionState::from_u16(state_num, character)?;
     let percent = f32::from_be_bytes(bytes[0x15..0x19].try_into().unwrap());
     let shield_size = f32::from_be_bytes(bytes[0x19..0x1D].try_into().unwrap());
+    let last_hitting_attack_id = bytes[0x1D] as u16;
     let stock_count = bytes[0x20];
     let anim_frame = f32::from_be_bytes(bytes[0x21..0x25].try_into().unwrap());
     let hitlag_frames = f32::from_be_bytes(bytes[0x48..0x4C].try_into().unwrap());
@@ -740,6 +745,7 @@ fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Po
     let is_airborne = bytes[0x2E] == 1;
     let last_ground_idx = u16::from_be_bytes(bytes[0x2F..0x31].try_into().unwrap());
     let state_flags = bytes[0x25..0x2A].try_into().unwrap();
+    let last_hitting_instance_id = u16::from_be_bytes(bytes[0x50..0x52].try_into().unwrap());
 
     Ok(PostFrameInfo {
         port_idx,
@@ -760,6 +766,8 @@ fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Po
         last_ground_idx,
         hitstun_misc,
         state_flags,
+        last_hitting_attack_id,
+        last_hitting_instance_id,
     })
 }
 

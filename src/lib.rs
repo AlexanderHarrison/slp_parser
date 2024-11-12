@@ -77,6 +77,8 @@ pub struct Frame {
     pub hitlag_frames: f32,
     pub last_ground_idx: u16,
     pub state_flags: [u8; 5],
+    pub last_hitting_attack_id: u16,
+    pub last_hitting_instance_id: u16,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
