@@ -103,7 +103,7 @@ pub struct GameInfo {
     pub high_port_idx: u8,
     pub high_starting_character: CharacterColour,
     pub start_time: Time,
-    pub duration: u32,
+    pub duration: i32,
     pub low_name: [u8; 32],
     pub high_name: [u8; 32],
     pub low_connect_code: [u8; 10],

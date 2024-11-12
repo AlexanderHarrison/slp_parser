@@ -226,7 +226,7 @@ fn parse_metadata(bytes: &[u8]) -> Metadata {
     if let Some(i) = bytes.windows(9).position(|w| w == b"lastFrame") {
         duration = i32::from_be_bytes(bytes[(i+10)..(i+14)].try_into().unwrap());
     } else {
-        duration = 0;
+        duration = -1;
     }
 
     Metadata {
