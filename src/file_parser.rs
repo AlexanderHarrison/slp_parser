@@ -210,7 +210,7 @@ pub struct Notes {
 
 #[derive(Copy, Clone, Debug)]
 pub struct Metadata {
-    pub duration: u32,
+    pub duration: i32,
     pub time: Time,
 }
 
@@ -224,9 +224,9 @@ fn parse_metadata(bytes: &[u8]) -> Metadata {
 
     let duration;
     if let Some(i) = bytes.windows(9).position(|w| w == b"lastFrame") {
-        duration = u32::from_be_bytes(bytes[(i+10)..(i+14)].try_into().unwrap());
+        duration = i32::from_be_bytes(bytes[(i+10)..(i+14)].try_into().unwrap());
     } else {
-        duration = u32::MAX;
+        duration = 0;
     }
 
     Metadata {
