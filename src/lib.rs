@@ -18,12 +18,28 @@ use std::path::Path;
 pub type SlpResult<T> = Result<T, SlpError>;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum InvalidLocation {
+    SlpzDecompression,
+    Metadata,
+    EventSizes,
+    GameStart,
+    ItemUpdate,
+    PreFrameUpdate,
+    PostFrameUpdate,
+    StadiumTransformation,
+    ParseActionState,
+}
+
+impl From<InvalidLocation> for SlpError {
+    fn from(il: InvalidLocation) -> Self { SlpError::InvalidFile(il) }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum SlpError {
     OutdatedFile,
     TooNewFile,
-    InvalidFile,
-    NotTwoPlayers,
-    UnimplementedCharacter(Character),
+    NotAnSlpFile,
+    InvalidFile(InvalidLocation),
     ZstdInitError,
 
     FileDoesNotExist,
@@ -44,16 +60,11 @@ pub struct Action {
     pub initial_velocity: Vector,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum Port {
-    Low = 0,
-    High = 1,
-}
-
 #[derive(Copy, Clone, Debug)]
 pub struct Frame {
     pub character: Character,
-    pub port_idx: u8, // zero indexed
+    pub port_idx: u8,
+    pub is_follower: bool,
     pub direction: Direction,
     pub velocity: Vector,
     pub hit_velocity: Vector,
@@ -67,8 +78,8 @@ pub struct Frame {
     // controls
     pub buttons_mask: ButtonsMask,
     pub analog_trigger_value: f32,
-    pub left_stick_coords: [f32; 2], // processed values
-    pub right_stick_coords: [f32; 2],
+    pub left_stick_coords: Vector, // processed values
+    pub right_stick_coords: Vector,
 
     pub hitstun_misc: f32, // char state var 1
     pub percent: f32,
@@ -82,7 +93,8 @@ pub struct Frame {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub struct Item {
+pub struct ItemUpdate {
+    pub frame_idx: u32,
     pub type_id: u16,
     pub state: u8,
     pub direction: Direction,
@@ -96,45 +108,35 @@ pub struct Item {
 }
 
 /// Names and codes are null terminated Shift JIS strings. 
-/// They are zeroes if played on console.
+/// They are zeroes if played on console or the port is unused.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct GameInfo {
     pub stage: Stage,
-    pub low_port_idx: u8,
-    pub low_starting_character: CharacterColour,
-    pub high_port_idx: u8,
-    pub high_starting_character: CharacterColour,
+    pub starting_character_colours: [Option<CharacterColour>; 4],
+    pub names: [[u8; 31]; 4],
+    pub connect_codes: [[u8; 10]; 4],
     pub start_time: Time,
     pub duration: i32,
-    pub low_name: [u8; 32],
-    pub high_name: [u8; 32],
-    pub low_connect_code: [u8; 10],
-    pub high_connect_code: [u8; 10],
 }
 
 /// Names and codes are null terminated Shift JIS strings. 
-/// They are zeroes if played on console.
+/// They are zeroes if played on console or the port is unused.
 #[derive(Copy, Clone, Debug)]
-pub struct GameStartInfo {
+pub struct GameStart {
     pub stage: Stage,
-    pub low_port_idx: u8,
-    pub low_starting_character: CharacterColour,
-    pub high_port_idx: u8,
-    pub high_starting_character: CharacterColour,
-    pub low_name: [u8; 32],
-    pub high_name: [u8; 32],
-    pub low_connect_code: [u8; 10],
-    pub high_connect_code: [u8; 10],
+    pub starting_character_colours: [Option<CharacterColour>; 4],
+    pub names: [[u8; 31]; 4],
+    pub connect_codes: [[u8; 10]; 4],
 }
 
 #[derive(Clone, Debug)]
 pub struct Game {
-    pub low_port_frames: Box<[Frame]>,
-    pub high_port_frames: Box<[Frame]>,
+    pub frames: [Option<Box<[Frame]>>; 4],
+    pub follower_frames: [Option<Box<[Frame]>>; 4],
 
     /// get item_range with `item_idx[frame]..item_idx[frame+1]`
     pub item_idx: Box<[u16]>,
-    pub items: Box<[Item]>,
+    pub items: Box<[ItemUpdate]>,
     pub info: GameInfo,
 
     pub stage_info: Option<StageInfo>,
@@ -142,9 +144,9 @@ pub struct Game {
 
 #[derive(Clone, Debug)]
 pub struct FountainHeights {
-    // (frame, height)
-    pub heights_l: Vec<(i32, f32)>,
-    pub heights_r: Vec<(i32, f32)>,
+    // (frame_idx, height)
+    pub heights_l: Vec<(u32, f32)>,
+    pub heights_r: Vec<(u32, f32)>,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -158,8 +160,8 @@ pub enum StadiumTransformation {
 
 #[derive(Clone, Debug)]
 pub struct StadiumTransformations {
-    // (frame, new transformation)
-    pub events: Vec<(i32, StadiumTransformation)>,
+    // (frame_idx, new transformation)
+    pub events: Vec<(u32, StadiumTransformation)>,
 }
 
 #[derive(Clone, Debug)]
@@ -169,7 +171,7 @@ pub enum StageInfo {
 }
 
 impl Game {
-    pub fn items_on_frame(&self, frame: usize) -> &[Item] {
+    pub fn items_on_frame(&self, frame: usize) -> &[ItemUpdate] {
         let start = self.item_idx[frame] as usize;
         let end = self.item_idx[frame+1] as usize;
         &self.items[start..end]
@@ -346,9 +348,9 @@ pub fn read_game(path: &Path) -> SlpResult<(Game, Notes)> {
 
     let ex = path.extension();
     let game = if ex != Some(std::ffi::OsStr::new("slpz")) {
-        file_parser::parse_file(&mut file_parser::Stream::new(&buf))?
+        file_parser::parse_file(&buf)?
     } else {
-        file_parser::parse_file_slpz(&mut file_parser::Stream::new(&buf))?
+        file_parser::parse_file_slpz(&buf)?
     };
 
     Ok(game)
@@ -388,16 +390,15 @@ pub fn write_notes_to_game(path: &Path, notes: &Notes) -> SlpResult<()> {
             read_count += read;
         }
 
-        let mut stream = Stream::new(&buf[0..read_count]);
-        let raw_len = skip_raw_header(&mut stream)?;
+        let RawHeaderRet { event_sizes_offset: _, metadata_offset } = parse_raw_header(&buf)?;
 
         let mut metadata = Vec::new();
-        file.seek(std::io::SeekFrom::Start(HEADER_LEN + raw_len as u64))?;
+        file.seek(std::io::SeekFrom::Start(metadata_offset as u64))?;
         file.read_to_end(&mut metadata)?;
 
         alter_notes(&mut metadata, notes);
 
-        file.seek(std::io::SeekFrom::Start(HEADER_LEN + raw_len as u64))?;
+        file.seek(std::io::SeekFrom::Start(metadata_offset as u64))?;
         file.write_all(metadata.as_slice())?;
 
         // remove not overwritten metadata
@@ -442,91 +443,88 @@ pub fn write_notes_to_game(path: &Path, notes: &Notes) -> SlpResult<()> {
     Ok(())
 }
 
-pub fn parse_game(game: &Path, port: Port) -> SlpResult<Box<[Action]>> {
-    use std::io::Read;
+//pub fn parse_game(game: &Path, port: Port) -> SlpResult<Box<[Action]>> {
+//    use std::io::Read;
+//
+//    let mut file = std::fs::File::open(game).map_err(|_| SlpError::FileDoesNotExist)?;
+//    let mut buf = Vec::new();
+//    file.read_to_end(&mut buf)?;
+//
+//    parse_buf(&buf, port)
+//}
+//
+//pub fn parse_buf(buf: &[u8], port: Port) -> SlpResult<Box<[Action]>> {
+//    let mut stream = file_parser::Stream::new(buf);
+//    let (game, _) = file_parser::parse_file(&mut stream)?;
+//
+//    let frames = match port {
+//        Port::High => &game.high_port_frames,
+//        Port::Low => &game.low_port_frames,
+//    };
+//
+//    Ok(parse(frames).into_boxed_slice())
+//}
 
-    let mut file = std::fs::File::open(game).map_err(|_| SlpError::FileDoesNotExist)?;
-    let mut buf = Vec::new();
-    file.read_to_end(&mut buf)?;
-
-    parse_buf(&buf, port)
-}
-
-pub fn parse_buf(buf: &[u8], port: Port) -> SlpResult<Box<[Action]>> {
-    let mut stream = file_parser::Stream::new(buf);
-    let (game, _) = file_parser::parse_file(&mut stream)?;
-
-    let frames = match port {
-        Port::High => &game.high_port_frames,
-        Port::Low => &game.low_port_frames,
-    };
-
-    Ok(parse(frames).into_boxed_slice())
-}
-
-macro_rules! unwrap_or {
-    ($opt:expr, $else:expr) => {
-        match $opt {
-            Some(data) => data,
-            None => $else,
-        }
-    }
-}
-
-
-pub fn generate_interactions<'a>(mut player_actions: &'a [Action], mut opponent_actions: &'a [Action]) -> Box<[InteractionRef<'a>]> {
-    let mut interactions = Vec::new();
-
-    let mut initiation;
-    let mut response;
-    (initiation, opponent_actions) = unwrap_or!(opponent_actions.split_first(), return interactions.into_boxed_slice());
-    (response, player_actions) = unwrap_or!(player_actions.split_first(), return interactions.into_boxed_slice());
-
-    'outer: loop {
-        while response.frame_start <= initiation.frame_start {
-            (response, player_actions) = unwrap_or!(player_actions.split_first(), break 'outer);
-        }
-
-        interactions.push(InteractionRef { 
-            player_response: response,
-            opponent_initiation: initiation,
-        });
-
-        while initiation.frame_start <= response.frame_start {
-            (initiation, opponent_actions) = unwrap_or!(opponent_actions.split_first(), break 'outer);
-        }
-    }
-
-    interactions.into_boxed_slice()
-}
-
-use std::fmt;
-impl fmt::Display for Action {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:10}: {:15} {} -> {}", self.start_state, self.action_taken, self.frame_start, self.frame_end)
-    }
-}
-
-impl fmt::Display for SlpError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", match self {
-            SlpError::OutdatedFile => format!(
-                "Outdated slp file. A version >= {}.{}.0 is required.",
-                MIN_VERSION_MAJOR,
-                MIN_VERSION_MINOR,
-            ),
-            SlpError::TooNewFile => "Slp file is too new and unsupported.".to_owned(),
-            SlpError::InvalidFile => "Invalid file.".to_owned(),
-            SlpError::NotTwoPlayers => "File must be a two player match.".to_owned(),
-            SlpError::ZstdInitError => "Failed to init zstd.".to_owned(),
-            SlpError::UnimplementedCharacter(c) => format!(
-                "{c} is not yet implemented.",
-            ),
-            SlpError::FileDoesNotExist => "File does not exist.".to_owned(),
-            SlpError::IOError => "Error reading file.".to_owned(),
-        })
-    }
-}
+//macro_rules! unwrap_or {
+//    ($opt:expr, $else:expr) => {
+//        match $opt {
+//            Some(data) => data,
+//            None => $else,
+//        }
+//    }
+//}
+//
+//
+//pub fn generate_interactions<'a>(mut player_actions: &'a [Action], mut opponent_actions: &'a [Action]) -> Box<[InteractionRef<'a>]> {
+//    let mut interactions = Vec::new();
+//
+//    let mut initiation;
+//    let mut response;
+//    (initiation, opponent_actions) = unwrap_or!(opponent_actions.split_first(), return interactions.into_boxed_slice());
+//    (response, player_actions) = unwrap_or!(player_actions.split_first(), return interactions.into_boxed_slice());
+//
+//    'outer: loop {
+//        while response.frame_start <= initiation.frame_start {
+//            (response, player_actions) = unwrap_or!(player_actions.split_first(), break 'outer);
+//        }
+//
+//        interactions.push(InteractionRef { 
+//            player_response: response,
+//            opponent_initiation: initiation,
+//        });
+//
+//        while initiation.frame_start <= response.frame_start {
+//            (initiation, opponent_actions) = unwrap_or!(opponent_actions.split_first(), break 'outer);
+//        }
+//    }
+//
+//    interactions.into_boxed_slice()
+//}
+//
+//use std::fmt;
+//impl fmt::Display for Action {
+//    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//        write!(f, "{:10}: {:15} {} -> {}", self.start_state, self.action_taken, self.frame_start, self.frame_end)
+//    }
+//}
+//
+//impl fmt::Display for SlpError {
+//    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//        write!(f, "{}", match self {
+//            SlpError::OutdatedFile => format!(
+//                "Outdated slp file. A version >= {}.{}.0 is required.",
+//                MIN_VERSION_MAJOR,
+//                MIN_VERSION_MINOR,
+//            ),
+//            SlpError::TooNewFile => "Slp file is too new and unsupported.".to_owned(),
+//            SlpError::InvalidFileSlpz => "Invalid slpz file.".to_owned(),
+//            SlpError::InvalidFile => "Invalid slp file.".to_owned(),
+//            SlpError::ZstdInitError => "Failed to init zstd.".to_owned(),
+//            SlpError::FileDoesNotExist => "File does not exist.".to_owned(),
+//            SlpError::IOError => "Error reading file.".to_owned(),
+//        })
+//    }
+//}
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Vector {

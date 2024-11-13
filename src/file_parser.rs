@@ -8,39 +8,314 @@ const GAME_END:             u8 = 0x39;
 //const FRAME_START:          u8 = 0x3A;
 const ITEM_UPDATE:          u8 = 0x3B;
 const FRAME_BOOKEND:        u8 = 0x3C;
-
 const FOD_INFO:             u8 = 0x3F;
 const DREAMLAND_INFO:       u8 = 0x40;
 const STADIUM_INFO:         u8 = 0x41;
-
-pub const MAX_SUPPORTED_SLPZ_VERSION: u32 = 0;
-
 //const GECKO_LIST:           u8 = 0x3D;
 
-// TODO not make such a mess
-// - remake Stream
-// - fix ambiguous command byte + weird byte offsets
+pub const MAX_SUPPORTED_SLPZ_VERSION: u32 = 0;
 
 pub const MIN_VERSION_MAJOR: u8 = 3;
 pub const MIN_VERSION_MINOR: u8 = 16;
 
+pub const PARSED_VERSION_MAJOR: u8 = 3;
+pub const PARSED_VERSION_MINOR: u8 = 16;
+
 pub const HEADER_LEN: u64 = 15;
 
-struct StreamInfo {
-    pub event_payload_sizes: [u16; 255],  
+fn read_f32(bytes: &[u8], offset: usize) -> f32 { f32::from_be_bytes(bytes[offset..][..4].try_into().unwrap()) }
+fn read_u32(bytes: &[u8], offset: usize) -> u32 { u32::from_be_bytes(bytes[offset..][..4].try_into().unwrap()) }
+fn read_u16(bytes: &[u8], offset: usize) -> u16 { u16::from_be_bytes(bytes[offset..][..2].try_into().unwrap()) }
+fn read_u8 (bytes: &[u8], offset: usize) -> u8  {  u8::from_be_bytes(bytes[offset..][..1].try_into().unwrap()) }
+fn read_i32(bytes: &[u8], offset: usize) -> i32 { i32::from_be_bytes(bytes[offset..][..4].try_into().unwrap()) }
+fn read_i8 (bytes: &[u8], offset: usize) -> i8  {  i8::from_be_bytes(bytes[offset..][..1].try_into().unwrap()) }
+fn read_array<const SIZE: usize>(bytes: &[u8], offset: usize) -> [u8; SIZE] {
+    bytes[offset..][..SIZE].try_into().unwrap()
 }
 
-impl StreamInfo {
-    pub fn create_event_stream<'a>(&self, code: u8, stream: &mut Stream<'a>) -> SlpResult<SubStream<'a>> {
-        let sub_size = self.event_payload_sizes[code as usize] as usize;
-        if sub_size == 0 || stream.bytes.len() < sub_size { return Err(SlpError::InvalidFile) }
-        Ok(stream.sub_stream(sub_size))
+type EventSizes = [u16; 255];
+
+pub fn parse_file_slpz(slpz: &[u8]) -> SlpResult<(Game, Notes)> {
+    let mut decompressor = slpz::Decompressor::new().ok_or(SlpError::ZstdInitError)?;
+    let slp = slpz::decompress(&mut decompressor, slpz)
+        .map_err(|_| SlpError::InvalidFile(InvalidLocation::SlpzDecompression))?;
+    parse_file(&slp)
+}
+
+pub fn parse_file(slp: &[u8]) -> SlpResult<(Game, Notes)> {
+    // parse header and metadata --------------------------------------------------------
+
+    let RawHeaderRet { event_sizes_offset, metadata_offset } = parse_raw_header(slp)?;
+    let EventSizesRet { game_start_offset, event_sizes } = event_sizes(slp, event_sizes_offset)?;
+    let game_start_size = event_sizes[GAME_START as usize] as usize + 1;
+    let game_start = parse_game_start(&slp[game_start_offset..][..game_start_size])?;
+    let metadata = parse_metadata(&slp[metadata_offset..]);
+
+    // setup mem for event parsing --------------------------------------------------------
+
+    let mut items = Vec::new();
+    let mut item_idx = vec![0];
+
+    struct FrameWriteOp {
+        pub from_idx: usize,
+        pub to: Vec<Frame>,
+    }
+    let mut frame_ops = [
+        FrameWriteOp { from_idx: 0, to: Vec::new() }, FrameWriteOp { from_idx: 0, to: Vec::new() },
+        FrameWriteOp { from_idx: 0, to: Vec::new() }, FrameWriteOp { from_idx: 0, to: Vec::new() },
+        FrameWriteOp { from_idx: 0, to: Vec::new() }, FrameWriteOp { from_idx: 0, to: Vec::new() },
+        FrameWriteOp { from_idx: 0, to: Vec::new() }, FrameWriteOp { from_idx: 0, to: Vec::new() },
+    ];
+    let mut frame_op_count = 0;
+
+    let frame_count_heuristic = (metadata.duration + 123) as usize + 1;
+    for i in 0..4 {
+        if let Some(ch_colour) = game_start.starting_character_colours[i] {
+            frame_ops[frame_op_count] = FrameWriteOp {
+                from_idx: i,
+                to: vec![Frame::NULL; frame_count_heuristic],
+            };
+            frame_op_count += 1;
+
+            if ch_colour.character() == Character::Popo {
+                frame_ops[frame_op_count] = FrameWriteOp {
+                    from_idx: i + 4,
+                    to: vec![Frame::NULL; frame_count_heuristic],
+                };
+                frame_op_count += 1;
+            }
+        }
     }
 
-    pub fn skip_event<'a>(&self, code: u8, stream: &mut Stream<'a>) -> SlpResult<()> {
-        self.create_event_stream(code, stream)
-            .map(|_| ())
+    let mut pre_frame_temp = [PreFrameUpdate::NULL; 8];
+    let mut post_frame_temp = [PostFrameUpdate::NULL; 8];
+
+    let mut stage_info = None;
+
+    // event parsing --------------------------------------------------------
+
+    let mut event_cursor = game_start_offset + game_start_size;
+    while event_cursor < metadata_offset {
+        let event_cmd = slp[event_cursor];
+        let event_size = event_sizes[event_cmd as usize] as usize + 1;
+        let event_bytes = &slp[event_cursor..][..event_size];
+        event_cursor += event_size;
+
+        match event_cmd {
+            ITEM_UPDATE => {
+                items.push(parse_item_update(event_bytes)?);
+            }
+            PRE_FRAME_UPDATE => {
+                let pre_frame = parse_pre_frame_update(event_bytes)?;
+                let mut temp_idx = pre_frame.port_idx as usize;
+                if pre_frame.is_follower { temp_idx += 4 }
+                pre_frame_temp[temp_idx] = pre_frame;
+            }
+            POST_FRAME_UPDATE => {
+                let post_frame = parse_post_frame_update(event_bytes)?;
+                let mut temp_idx = post_frame.port_idx as usize;
+                if post_frame.is_follower { temp_idx += 4 }
+                post_frame_temp[temp_idx] = post_frame;
+            }
+            FRAME_BOOKEND => {
+                let frame_idx = (read_i32(event_bytes, 0x1) + 123) as usize;
+
+                for i in 0..frame_op_count {
+                    let op = &mut frame_ops[i];
+                    let pre = &pre_frame_temp[op.from_idx];
+                    let post = &post_frame_temp[op.from_idx];
+
+                    // no need to special case rollback, just overwrite the frame
+                    if op.to.len() <= frame_idx { op.to.resize(frame_idx+1, Frame::NULL); }
+                    op.to[frame_idx] = merge_pre_post_frames(pre, post);
+                }
+
+                if item_idx.len() != frame_idx + 1 {
+                    // handle rollback
+
+                    // remove items from rollback frame until the items added this frame
+                    items.splice(
+                        item_idx[frame_idx] as usize..item_idx[item_idx.len()-1] as usize,
+                        []
+                    );
+                    item_idx.truncate(frame_idx + 1);
+                }
+                item_idx.push(items.len() as u16);
+            }
+            FOD_INFO => {
+                let fountain_heights = match stage_info {
+                    Some(StageInfo::Fountain(ref mut heights)) => heights,
+                    None => {
+                        stage_info = Some(StageInfo::Fountain(FountainHeights {
+                            heights_l: Vec::new(),
+                            heights_r: Vec::new(),
+                        }));
+
+                        match stage_info {
+                            Some(StageInfo::Fountain(ref mut heights)) => heights,
+                            _ => unreachable!(),
+                        }
+                    },
+                    _ => unreachable!(),
+                };
+
+                let frame_idx = (read_i32(event_bytes, 0x1) + 123) as u32;
+                let plat = read_u8(event_bytes, 0x5);
+                let height = read_f32(event_bytes, 0x6);
+
+                let arr = match plat {
+                    0 => &mut fountain_heights.heights_r,
+                    1 => &mut fountain_heights.heights_l,
+                    _ => unreachable!()
+                };
+
+                // handle rollback (a little silly, but should work)
+                if arr.len() >= 8 {
+                    for i in 0..8 {
+                        let i_rev = arr.len() - i - 1;
+                        if arr[i_rev].0 >= frame_idx {
+                            arr.truncate(i_rev);
+                        }
+                    }
+                }
+
+                arr.push((frame_idx, height));
+            }
+            DREAMLAND_INFO => {} // TODO
+            STADIUM_INFO => {
+                let transformations = match stage_info {
+                    Some(StageInfo::Stadium(ref mut transformations)) => transformations,
+                    None => {
+                        stage_info = Some(StageInfo::Stadium(StadiumTransformations {
+                            events: Vec::new(),
+                        }));
+
+                        match stage_info {
+                            Some(StageInfo::Stadium(ref mut transformations)) => transformations,
+                            _ => unreachable!(),
+                        }
+                    },
+                    _ => unreachable!(),
+                };
+
+                let frame_idx = (read_i32(event_bytes, 0x1) + 123) as u32;
+                let event = read_u16(event_bytes, 0x5);
+                let transformation_id = read_u16(event_bytes, 0x7);
+
+                // we only care about the first event
+                if event == 2 {
+                    let transformation = match transformation_id {
+                        3 => StadiumTransformation::Fire,
+                        4 => StadiumTransformation::Grass,
+                        5 => StadiumTransformation::Normal,
+                        6 => StadiumTransformation::Rock,
+                        9 => StadiumTransformation::Water,
+                        _ => return Err(SlpError::InvalidFile(InvalidLocation::StadiumTransformation)),
+                    };
+
+                    // Shouldn't rollback, as slippi doesn't use transformations
+                    transformations.events.push((frame_idx, transformation));
+                }
+            }
+            GAME_END => break,
+            _ => {}
+        }
     }
+
+    // finish up --------------------------------------------------------
+
+    let info = merge_metadata(game_start, metadata);
+    let notes = parse_notes(&slp[metadata_offset..]);
+
+    let mut frames = [None, None, None, None];
+    let mut follower_frames = [None, None, None, None];
+
+    for i in 0..frame_op_count {
+        let op = &mut frame_ops[i];
+
+        let to = std::mem::replace(&mut op.to, Vec::new());
+        let to = Some(to.into_boxed_slice());
+        if op.from_idx < 4 {
+            frames[op.from_idx] = to;
+        } else {
+            follower_frames[op.from_idx - 4] = to;
+        }
+    }
+
+    let game = Game {
+        frames,
+        follower_frames,
+        item_idx: item_idx.into(),
+        items: items.into(),
+        info,
+        stage_info,
+    };
+
+    Ok((game, notes))
+}
+
+// EVENTS ------------------------------------------------------------------------
+
+fn parse_game_start(game_start: &[u8]) -> SlpResult<GameStart> {
+    if game_start.len() < 5 { return Err(SlpError::InvalidFile(InvalidLocation::GameStart)); }
+    if game_start[0] != GAME_START { return Err(SlpError::InvalidFile(InvalidLocation::GameStart)); }
+
+    let version = read_array::<4>(game_start, 1);
+
+    if version[0] < MIN_VERSION_MAJOR { return Err(SlpError::OutdatedFile) }
+    if version[0] == MIN_VERSION_MAJOR && version[1] < MIN_VERSION_MINOR { return Err(SlpError::OutdatedFile) }
+
+    if game_start.len() < 761 { return Err(SlpError::InvalidFile(InvalidLocation::GameStart)); }
+    let game_info_block = &game_start[5..];
+
+    let stage = Stage::from_u16(read_u16(game_info_block, 0xE))
+        .ok_or(SlpError::InvalidFile(InvalidLocation::GameStart))?;
+    
+    let mut starting_character_colours = [None; 4];
+    let mut names = [[0u8; 31]; 4];
+    let mut connect_codes = [[0u8; 10]; 4];
+
+    for i in 0..4 {
+        if read_u8(game_info_block, 0x61 + 0x24*i) == 3 { continue; }
+
+        let character = Character::from_u8_external(read_u8(game_info_block, 0x60 + 0x24*i))
+            .ok_or(SlpError::InvalidFile(InvalidLocation::GameStart))?;
+        let character_colour = CharacterColour::from_character_and_colour(character, read_u8(game_info_block, 0x63 + 0x24*i))
+            .ok_or(SlpError::InvalidFile(InvalidLocation::GameStart))?;
+
+        starting_character_colours[i] = Some(character_colour);
+        names[i] = read_array::<31>(game_start, 0x1A5 + 0x1F*i);
+        connect_codes[i] = read_array::<10>(game_start, 0x221 + 0xA*i);
+    }
+
+    Ok(GameStart {
+        stage,
+        starting_character_colours,
+        names,
+        connect_codes,
+    })
+}
+
+pub fn parse_item_update(item_update: &[u8]) -> SlpResult<ItemUpdate> {
+    if item_update.len() < 0x2C { return Err(SlpError::InvalidFile(InvalidLocation::ItemUpdate)); }
+    if item_update[0] != ITEM_UPDATE { return Err(SlpError::InvalidFile(InvalidLocation::ItemUpdate)); }
+
+    Ok(ItemUpdate {
+        frame_idx            : (read_i32(item_update, 0x1) + 123) as u32,
+        type_id              : read_u16(item_update, 0x5),
+        state                : read_u8(item_update, 0x7),
+        direction            : if read_f32(item_update, 0x8) == 1.0 { Direction::Right } else { Direction::Left },
+        position             : Vector {
+            x                : read_f32(item_update, 0x14),
+            y                : read_f32(item_update, 0x18),
+        },
+        spawn_id             : read_u32(item_update, 0x22),
+        missile_type         : read_u8(item_update, 0x26),
+        turnip_type          : read_u8(item_update, 0x27),
+        charge_shot_launched : read_u8(item_update, 0x28) != 0,
+        charge_shot_power    : read_u8(item_update, 0x29),
+        owner                : read_i8(item_update, 0x2A),
+    })
 }
 
 pub type ButtonsMask = u16;
@@ -60,18 +335,86 @@ pub mod buttons_mask {
 }
 
 #[derive(Copy, Clone, Debug)]
-struct PreFrameInfo {
+struct PreFrameUpdate {
     pub port_idx: u8,
+    pub is_follower: bool,
     pub buttons_mask: ButtonsMask,
     pub analog_trigger_value: f32,
-    pub left_stick_coords: [f32; 2],
-    pub right_stick_coords: [f32; 2],
+    pub left_stick_coords: Vector,
+    pub right_stick_coords: Vector,
+}
+
+impl Vector {
+    const NULL: Vector = Vector { x: 0.0, y: 0.0 };
+}
+
+impl PreFrameUpdate {
+    const NULL: PreFrameUpdate = PreFrameUpdate {
+        port_idx: 0,
+        is_follower: false,
+        buttons_mask: 0,
+        analog_trigger_value: 0.0,
+        left_stick_coords: Vector::NULL,
+        right_stick_coords: Vector::NULL,
+    };
+}
+
+impl Frame {
+    const NULL: Frame = Frame {
+        character               : Character::Mario,
+        port_idx                : 0,
+        is_follower             : false,
+        direction               : Direction::Left,
+        velocity                : Vector::NULL,
+        hit_velocity            : Vector::NULL,
+        ground_x_velocity       : 0.0,
+        position                : Vector::NULL,
+        state                   : ActionState::Standard(StandardActionState::DeadDown),
+        state_num               : 0,
+        anim_frame              : 0.0,
+        shield_size             : 0.0,
+        buttons_mask            : 0,
+        analog_trigger_value    : 0.0,
+        left_stick_coords       : Vector::NULL,
+        right_stick_coords      : Vector::NULL,
+        hitstun_misc            : 0.0,
+        percent                 : 0.0,
+        stock_count             : 0,
+        is_airborne             : false,
+        hitlag_frames           : 0.0,
+        last_ground_idx         : 0,
+        state_flags             : [0u8; 5],
+        last_hitting_attack_id  : 0,
+        last_hit_by_instance_id : 0,
+    };
+}
+
+
+fn parse_pre_frame_update(pre_frame_update: &[u8]) -> SlpResult<PreFrameUpdate> {
+    if pre_frame_update.len() < 0x41 { return Err(SlpError::InvalidFile(InvalidLocation::PreFrameUpdate)); }
+    if pre_frame_update[0] != PRE_FRAME_UPDATE { return Err(SlpError::InvalidFile(InvalidLocation::PreFrameUpdate)); }
+
+    Ok(PreFrameUpdate {
+        port_idx                      : read_u8(pre_frame_update, 0x5),
+        is_follower                   : read_u8(pre_frame_update, 0x6) != 0,
+        buttons_mask                  : read_u16(pre_frame_update, 0x31),
+        analog_trigger_value          : read_f32(pre_frame_update, 0x29),
+        left_stick_coords             : Vector {
+            x                         : read_f32(pre_frame_update, 0x19),
+            y                         : read_f32(pre_frame_update, 0x1D),
+        },
+        right_stick_coords            : Vector {
+            x                         : read_f32(pre_frame_update, 0x21),
+            y                         : read_f32(pre_frame_update, 0x25),
+        },
+    })
 }
 
 #[derive(Copy, Clone, Debug)]
-struct PostFrameInfo {
+struct PostFrameUpdate {
+    pub port_idx: u8,
+    pub is_follower: bool,
     pub character: Character,
-    pub port_idx: u8, // zero indexed
     pub direction: Direction,
     pub velocity: Vector,
     pub hit_velocity: Vector,
@@ -92,10 +435,78 @@ struct PostFrameInfo {
     pub last_hit_by_instance_id: u16,
 }
 
-fn merge_pre_post_frames(pre: PreFrameInfo, post: PostFrameInfo) -> Frame {
+impl PostFrameUpdate {
+    const NULL: PostFrameUpdate = PostFrameUpdate {
+        port_idx: 0,
+        is_follower: false,
+        character: Character::Mario,
+        direction: Direction::Left,
+        velocity: Vector::NULL,
+        hit_velocity: Vector::NULL,
+        ground_x_velocity: 0.0,
+        position: Vector::NULL,
+        state: ActionState::Standard(StandardActionState::DeadDown),
+        state_num: 0,
+        anim_frame: 0.0,
+        shield_size: 0.0,
+        stock_count: 0,
+        percent: 0.0,
+        is_airborne: false,
+        hitlag_frames: 0.0,
+        last_ground_idx: 0,
+        hitstun_misc: 0.0,
+        state_flags: [0u8; 5],
+        last_hitting_attack_id: 0,
+        last_hit_by_instance_id: 0,
+    };
+}
+
+fn parse_post_frame_update(post_frame_update: &[u8]) -> SlpResult<PostFrameUpdate> {
+    if post_frame_update.len() < 0x55 { return Err(SlpError::InvalidFile(InvalidLocation::PostFrameUpdate)); }
+    if post_frame_update[0] != POST_FRAME_UPDATE { return Err(SlpError::InvalidFile(InvalidLocation::PostFrameUpdate)); }
+
+    let character = Character::from_u8_internal(post_frame_update[0x7])
+        .ok_or(SlpError::InvalidFile(InvalidLocation::PostFrameUpdate))?;
+
+    Ok(PostFrameUpdate {
+        port_idx                : read_u8(post_frame_update, 0x5),
+        is_follower             : read_u8(post_frame_update, 0x6) != 0,
+        character,
+        state                   : ActionState::from_u16(read_u16(post_frame_update, 0x8), character)?,
+        state_num               : read_u16(post_frame_update, 0x8),
+        position                : Vector {
+            x                   : read_f32(post_frame_update, 0xA),
+            y                   : read_f32(post_frame_update, 0xE),
+        },
+        direction               : if read_f32(post_frame_update, 0x12) == 1.0 { Direction::Right } else { Direction::Left },
+        percent                 : read_f32(post_frame_update, 0x16),
+        shield_size             : read_f32(post_frame_update, 0x1A),
+        last_hitting_attack_id  : read_u16(post_frame_update, 0x1E),
+        stock_count             : read_u8(post_frame_update, 0x21),
+        anim_frame              : read_f32(post_frame_update, 0x22),
+        state_flags             : read_array::<5>(post_frame_update, 0x26),
+        hitstun_misc            : read_f32(post_frame_update, 0x2B),
+        is_airborne             : read_u8(post_frame_update, 0x2F) != 0,
+        last_ground_idx         : read_u16(post_frame_update, 0x30),
+        velocity                : Vector {
+            x                   : read_f32(post_frame_update, 0x35),
+            y                   : read_f32(post_frame_update, 0x39),
+        },
+        hit_velocity            : Vector {
+            x                   : read_f32(post_frame_update, 0x3D),
+            y                   : read_f32(post_frame_update, 0x41),
+        },
+        ground_x_velocity       : read_f32(post_frame_update, 0x45),
+        hitlag_frames           : read_f32(post_frame_update, 0x49),
+        last_hit_by_instance_id : read_u16(post_frame_update, 0x53),
+    })
+}
+
+fn merge_pre_post_frames(pre: &PreFrameUpdate, post: &PostFrameUpdate) -> Frame {
     Frame {
         character: post.character,
         port_idx: post.port_idx,   
+        is_follower: post.is_follower,
         direction: post.direction,    
         velocity: post.velocity,     
         hit_velocity: post.hit_velocity, 
@@ -121,7 +532,59 @@ fn merge_pre_post_frames(pre: PreFrameInfo, post: PostFrameInfo) -> Frame {
     }
 }
 
-// don't use stream - usually this is called for many files at a time
+// HEADER ------------------------------------------------------------------------
+
+#[derive(Copy, Clone, Debug)]
+pub struct EventSizesRet {
+    pub game_start_offset: usize,
+    pub event_sizes: EventSizes,
+}
+
+pub fn event_sizes(slp: &[u8], event_sizes_offset: usize) -> SlpResult<EventSizesRet> {
+    if slp.len() < event_sizes_offset + 2 { return Err(SlpError::InvalidFile(InvalidLocation::EventSizes)) }
+    if slp[event_sizes_offset] != EVENT_PAYLOADS { return Err(SlpError::InvalidFile(InvalidLocation::EventSizes)) }
+
+    let info_size = slp[event_sizes_offset+1] as usize;
+    if slp.len() < event_sizes_offset + info_size + 1 { return Err(SlpError::InvalidFile(InvalidLocation::EventSizes)) }
+    let event_count = (info_size - 1) / 3;
+
+    let mut event_sizes = [0; 255];
+    for i in 0..event_count {
+        let offset = event_sizes_offset + 2 + i*3;
+        let command_byte = slp[offset] as usize;
+        let event_size = read_u16(slp, offset+1);
+        event_sizes[command_byte] = event_size;
+    }
+
+    Ok(EventSizesRet {
+        game_start_offset: event_sizes_offset + info_size + 1,
+        event_sizes,
+    })
+}
+
+// returns offset of metadata
+#[derive(Copy, Clone, Debug)]
+pub struct RawHeaderRet {
+    pub event_sizes_offset: usize,
+    pub metadata_offset: usize,
+}
+
+pub fn parse_raw_header(slp: &[u8]) -> SlpResult<RawHeaderRet> {
+    const HEADER: &'static [u8] = b"{U\x03raw[$U#l";
+
+    if slp.len() < HEADER.len() + 4 { return Err(SlpError::NotAnSlpFile); }
+
+    for i in 0..HEADER.len() {
+        if slp[i] != HEADER[i] { return Err(SlpError::NotAnSlpFile) }
+    }
+
+    let raw_len = read_u32(slp, HEADER.len()) as usize;
+    Ok(RawHeaderRet {
+        event_sizes_offset: HEADER.len() + 4,
+        metadata_offset: HEADER.len() + raw_len,
+    })
+}
+
 pub fn parse_file_info(reader: &mut (impl std::io::Read + std::io::Seek)) -> SlpResult<GameInfo> {
     let mut buf = [0u8; 1024];
     
@@ -134,18 +597,17 @@ pub fn parse_file_info(reader: &mut (impl std::io::Read + std::io::Seek)) -> Slp
         read_count += read;
     }
 
-    let mut stream = Stream::new(&buf[0..read_count]);
+    let RawHeaderRet { event_sizes_offset, metadata_offset } = parse_raw_header(&buf)?;
+    let EventSizesRet { game_start_offset, event_sizes } = event_sizes(&buf, event_sizes_offset)?;
+    let game_start_size = event_sizes[GAME_START as usize] as usize + 1;
+    let game_start = parse_game_start(&buf[game_start_offset..][..game_start_size])?;
 
-    let raw_len = skip_raw_header(&mut stream)?;
-    let stream_info = parse_event_payloads(&mut stream)?;
-    let game_start_info = parse_game_start(&mut stream, &stream_info)?;
-
-    reader.seek(std::io::SeekFrom::Start(HEADER_LEN + raw_len as u64))?;
+    reader.seek(std::io::SeekFrom::Start(metadata_offset as u64))?;
     let read_count = reader.read(&mut buf)?;
 
     let metadata = parse_metadata(&buf[..read_count]);
 
-    Ok(merge_metadata(game_start_info, metadata))
+    Ok(merge_metadata(game_start, metadata))
 }
 
 pub fn parse_file_info_slpz(reader: &mut (impl std::io::Read + std::io::Seek)) -> SlpResult<GameInfo> {
@@ -160,13 +622,13 @@ pub fn parse_file_info_slpz(reader: &mut (impl std::io::Read + std::io::Seek)) -
         read_count += read;
     }
 
-    let version = read_u32(&buf[0..]);
+    let version = read_u32(&buf, 0);
     if version > MAX_SUPPORTED_SLPZ_VERSION { return Err(SlpError::TooNewFile) }
 
-    let event_sizes_offset = read_u32(&buf[4..]) as usize;
-    let game_start_offset = read_u32(&buf[8..]) as usize;
-    let metadata_offset = read_u32(&buf[12..]) as usize;
-    let compressed_events_offset = read_u32(&buf[16..]) as usize;
+    let event_sizes_offset = read_u32(&buf, 4) as usize;
+    let game_start_offset = read_u32(&buf, 8) as usize;
+    let metadata_offset = read_u32(&buf, 12) as usize;
+    let compressed_events_offset = read_u32(&buf, 16) as usize;
 
     // TODO
     assert!(compressed_events_offset < 4096);
@@ -177,30 +639,22 @@ pub fn parse_file_info_slpz(reader: &mut (impl std::io::Read + std::io::Seek)) -
         read_count += read;
     }
 
-    let stream_info = parse_event_payloads(&mut Stream::new(&buf[event_sizes_offset..game_start_offset]))?;
-    let game_start_info = parse_game_start(
-        &mut Stream::new(&buf[game_start_offset..metadata_offset]), 
-        &stream_info
-    )?;
+    let EventSizesRet { game_start_offset: _, event_sizes } = event_sizes(&buf, event_sizes_offset)?;
+    let game_start_size = event_sizes[GAME_START as usize] as usize + 1;
+    let game_start = parse_game_start(&buf[game_start_offset..][..game_start_size])?;
     let metadata = parse_metadata(&buf[metadata_offset..compressed_events_offset]);
 
-    Ok(merge_metadata(game_start_info, metadata))
+    Ok(merge_metadata(game_start, metadata))
 }
 
-
-fn merge_metadata(game_start_info: GameStartInfo, metadata: Metadata) -> GameInfo {
+fn merge_metadata(game_start: GameStart, metadata: Metadata) -> GameInfo {
     GameInfo {
-        stage: game_start_info.stage,
-        low_port_idx: game_start_info.low_port_idx,
-        low_starting_character: game_start_info.low_starting_character,
-        high_port_idx: game_start_info.high_port_idx,
-        high_starting_character: game_start_info.high_starting_character,
-        start_time: metadata.time,
-        low_name: game_start_info.low_name,
-        high_name: game_start_info.high_name,
-        low_connect_code: game_start_info.low_connect_code,
-        high_connect_code: game_start_info.high_connect_code,
-        duration: metadata.duration,
+        stage                      : game_start.stage,
+        starting_character_colours : game_start.starting_character_colours,
+        start_time                 : metadata.time,
+        names                      : game_start.names,
+        connect_codes              : game_start.connect_codes,
+        duration                   : metadata.duration,
     }
 }
 
@@ -339,274 +793,6 @@ pub fn write_notes(buffer: &mut Vec<u8>, notes: &Notes) {
     buffer.push(b'}');
 }
 
-fn unimplemented_character(c: Character) -> bool {
-    match c {
-        Character::Popo | Character::Nana => true,
-        _ => false,
-    }
-}
-
-pub fn parse_file(stream: &mut Stream) -> SlpResult<(Game, Notes)> {
-    let raw_len = skip_raw_header(stream)?;
-    let metadata_bytes = &stream.as_slice()[raw_len as usize..];
-
-    let stream_info = parse_event_payloads(stream)?;
-    let game_start_info = parse_game_start(stream, &stream_info)?;
-
-    let low_char = game_start_info.low_starting_character.character();
-    let high_char = game_start_info.high_starting_character.character();
-    if unimplemented_character(low_char) { return Err(SlpError::UnimplementedCharacter(low_char)) }
-    if unimplemented_character(high_char) { return Err(SlpError::UnimplementedCharacter(high_char)) }
-
-    let mut low_port_frames = Vec::new();
-    let mut high_port_frames = Vec::new();
-
-    let mut port_info: [Option<Port>; 4] = [None; 4];
-    port_info[game_start_info.low_port_idx as usize] = Some(Port::Low);
-    port_info[game_start_info.high_port_idx as usize] = Some(Port::High);
-
-    let mut items = Vec::new();
-    let mut item_idx = vec![0];
-
-    // dummy values
-    let mut pre_frame_low = PreFrameInfo { 
-        port_idx: 0,
-        buttons_mask: 0, 
-        analog_trigger_value: 0.0, 
-        right_stick_coords: [0.0; 2],
-        left_stick_coords: [0.0; 2],
-    };
-    let mut pre_frame_high = pre_frame_low;
-    
-    let mut stage_info = None;
-
-    loop {
-        let next_command_byte = stream.take_u8()?;
-        match next_command_byte {
-            ITEM_UPDATE => {
-                items.push(parse_item_update(stream, &stream_info)?);
-            }
-            PRE_FRAME_UPDATE => {
-                let pre_frame = parse_pre_frame_info(stream, &stream_info)?;
-                let port = port_info[pre_frame.port_idx as usize].unwrap();
-                match port {
-                    Port::Low => pre_frame_low = pre_frame,
-                    Port::High => pre_frame_high = pre_frame,
-                }
-            }
-            POST_FRAME_UPDATE => {
-                let post_frame = parse_post_frame_info(stream, &stream_info)?;
-
-                let port = port_info[post_frame.port_idx as usize].unwrap();
-
-                match port {
-                    Port::Low => low_port_frames.push(merge_pre_post_frames(pre_frame_low, post_frame)),
-                    Port::High => high_port_frames.push(merge_pre_post_frames(pre_frame_high, post_frame)),
-                }
-            }
-            FRAME_BOOKEND => {
-                let mut stream = stream_info.create_event_stream(FRAME_BOOKEND, stream)?;
-                let frame_num = (stream.take_i32()? + 123) as usize; // slippi starts frames at -123
-
-                // rollback :(
-                if frame_num + 1 as usize != low_port_frames.len() {
-                    low_port_frames[frame_num] = low_port_frames[low_port_frames.len()-1];
-                    high_port_frames[frame_num] = high_port_frames[low_port_frames.len()-1];
-                    low_port_frames.truncate(frame_num+1);
-                    high_port_frames.truncate(frame_num+1);
-
-                    // TODO untested eek
-                    let item_idx_restart = item_idx[frame_num] as usize;
-                    let item_start_this_frame = item_idx[item_idx.len()-1] as usize;
-                    let item_count_this_frame = items.len() - item_start_this_frame;
-                    for i in 0..item_count_this_frame {
-                        items[item_idx_restart+i] = items[item_start_this_frame+i];
-                    }
-                    items.truncate(item_idx_restart+item_count_this_frame);
-                    if item_idx.len() == frame_num+1 {
-                        item_idx.push(items.len() as _);
-                    } else {
-                        item_idx[frame_num+1] = items.len() as _;
-                        item_idx.truncate(frame_num+2);
-                    }
-                } else {
-                    item_idx.push(items.len() as _);
-                }
-            }
-            FOD_INFO => {
-                let fountain_heights = match stage_info {
-                    Some(StageInfo::Fountain(ref mut heights)) => heights,
-                    None => {
-                        stage_info = Some(StageInfo::Fountain(FountainHeights {
-                            heights_l: Vec::new(),
-                            heights_r: Vec::new(),
-                        }));
-
-                        match stage_info {
-                            Some(StageInfo::Fountain(ref mut heights)) => heights,
-                            _ => unreachable!(),
-                        }
-                    },
-                    _ => unreachable!(),
-                };
-
-                let mut stream = stream_info.create_event_stream(FOD_INFO, stream)?;
-                let frame = stream.take_i32()?;
-                let plat = stream.take_u8()?;
-                let height = stream.take_float()?;
-
-                match plat {
-                    0 => fountain_heights.heights_r.push((frame, height)),
-                    1 => fountain_heights.heights_l.push((frame, height)),
-                    _ => unreachable!()
-                };
-            }
-            DREAMLAND_INFO => {
-                let mut _stream = stream_info.create_event_stream(DREAMLAND_INFO, stream)?;
-                //println!("dreamland: {:x?}", stream.bytes);
-            }
-            STADIUM_INFO => {
-                let transformations = match stage_info {
-                    Some(StageInfo::Stadium(ref mut transformations)) => transformations,
-                    None => {
-                        stage_info = Some(StageInfo::Stadium(StadiumTransformations {
-                            events: Vec::new(),
-                        }));
-
-                        match stage_info {
-                            Some(StageInfo::Stadium(ref mut transformations)) => transformations,
-                            _ => unreachable!(),
-                        }
-                    },
-                    _ => unreachable!(),
-                };
-
-                let mut stream = stream_info.create_event_stream(STADIUM_INFO, stream)?;
-                let frame = stream.take_i32()?;
-                let event = stream.take_u16()?;
-                let transformation_id = stream.take_u16()?;
-
-                // only care about first event
-                if event == 2 {
-                    let transformation = match transformation_id {
-                        3 => StadiumTransformation::Fire,
-                        4 => StadiumTransformation::Grass,
-                        5 => StadiumTransformation::Normal,
-                        6 => StadiumTransformation::Rock,
-                        9 => StadiumTransformation::Water,
-                        _ => return Err(SlpError::InvalidFile),
-                    };
-
-                    transformations.events.push((frame, transformation));
-                }
-            }
-            GAME_END => break,
-            _ => {
-                stream_info.skip_event(next_command_byte, stream)?;
-            }
-        }
-    }
-
-    let metadata = parse_metadata(metadata_bytes);
-    let notes = parse_notes(metadata_bytes);
-
-    Ok((Game {
-        high_port_frames: high_port_frames.into_boxed_slice(), 
-        low_port_frames: low_port_frames.into_boxed_slice(),
-        item_idx: item_idx.into_boxed_slice(),
-        items: items.into_boxed_slice(),
-        info: merge_metadata(game_start_info, metadata),
-        stage_info,
-    }, notes))
-}
-
-pub fn parse_file_slpz(stream: &mut Stream) -> SlpResult<(Game, Notes)> {
-    let mut decompressor = slpz::Decompressor::new().ok_or(SlpError::ZstdInitError)?;
-    let slp = slpz::decompress(&mut decompressor, stream.bytes).map_err(|_| SlpError::InvalidFile)?;
-    parse_file(&mut Stream::new(&slp))
-}
-
-pub fn skip_raw_header(stream: &mut Stream) -> SlpResult<u32> {
-    const HEADER: &'static str = "raw[$U#l";
-    for c in HEADER.bytes() {
-        let mut next_b = stream.take_u8()?;
-        while next_b != c {
-            next_b = stream.take_u8()?;
-        }
-    }
-
-    stream.take_u32()
-}
-
-fn parse_game_start(stream: &mut Stream, info: &StreamInfo) -> SlpResult<GameStartInfo> {
-    // note: takes a byte here
-    if stream.take_u8() != Ok(GAME_START) { return Err(SlpError::InvalidFile) };
-    let substream = info.create_event_stream(GAME_START, stream)?;
-    let bytes = substream.as_slice();
-
-    // requires version >= 3.14.0
-    if bytes[0] < MIN_VERSION_MAJOR || 
-        (bytes[0] == MIN_VERSION_MAJOR && bytes[1] < MIN_VERSION_MINOR) 
-    {
-        return Err(SlpError::OutdatedFile)
-    }
-
-    let stage_start = 0x4 + 0xE;
-    let stage = u16::from_be_bytes(bytes[stage_start..(stage_start+2)].try_into().unwrap());
-    let stage = Stage::from_u16(stage)
-        .ok_or(SlpError::InvalidFile)?;
-
-    let mut port_types = [0u8; 4];
-    for i in 0..4 {
-        port_types[i] = bytes[0x04 + 0x61 + 0x24 * i];
-    }
-
-    let mut port_iter = port_types.iter().enumerate().filter_map(|(i,p)| if *p != 3 { Some(i) } else { None });
-    let low_port_idx = port_iter.next().ok_or(SlpError::NotTwoPlayers)? as _;
-    let high_port_idx = port_iter.next().ok_or(SlpError::NotTwoPlayers)? as _;
-    if port_iter.next().is_some() { return Err(SlpError::NotTwoPlayers) }
-
-    let low_char_idx  = bytes[0x04 + 0x60 + 0x24 * low_port_idx as usize];
-    let low_colour_idx = bytes[0x04 + 0x63 + 0x24 * low_port_idx as usize];
-    let high_char_idx = bytes[0x04 + 0x60 + 0x24 * high_port_idx as usize];
-    let high_colour_idx = bytes[0x04 + 0x63 + 0x24 * high_port_idx as usize];
-    let low_char  = Character::from_u8_external(low_char_idx)
-        .ok_or(SlpError::InvalidFile)?;
-    let high_char = Character::from_u8_external(high_char_idx)
-        .ok_or(SlpError::InvalidFile)?;
-
-    // mods can add more colour indices, so replace with neutral colour
-    let low_starting_character  = CharacterColour::from_character_and_colour(low_char, low_colour_idx)
-        .unwrap_or_else(|| CharacterColour::from_character_and_colour(low_char, 0).unwrap());
-    let high_starting_character = CharacterColour::from_character_and_colour(high_char, high_colour_idx)
-        .unwrap_or_else(|| CharacterColour::from_character_and_colour(high_char, 0).unwrap());
-
-    let low_name_offset = 0x1A5 + 0x1F * low_port_idx as usize - 1;
-    let low_name = bytes[low_name_offset..low_name_offset+32].try_into().unwrap();
-    let high_name_offset = 0x1A5 + 0x1F * high_port_idx as usize - 1;
-    let high_name = bytes[high_name_offset..high_name_offset+32].try_into().unwrap();
-
-    let low_code_offset = 0x221 + 0x0A * low_port_idx as usize - 1;
-    let low_connect_code = bytes[low_code_offset..low_code_offset+10].try_into().unwrap();
-    let high_code_offset = 0x221 + 0x0A * high_port_idx as usize - 1;
-    let high_connect_code = bytes[high_code_offset..high_code_offset+10].try_into().unwrap();
-
-    //let timestamp = &bytes[(0x04 + 0x2BE)..(0x04 + 0x2BE + 51)];
-    //let start_time = parse_timestamp(timestamp)?;
-
-    Ok(GameStartInfo {
-        stage, 
-        low_port_idx, 
-        low_starting_character,
-        high_port_idx,
-        high_starting_character,
-        low_name,
-        high_name,
-        low_connect_code,
-        high_connect_code,
-    })
-}
-
 fn parse_timestamp(timestamp: &[u8]) -> SlpResult<Time> {
     // 2023-10-04T03:43:00.64-0
     // 2018-06-22T07:52:59Z
@@ -614,7 +800,7 @@ fn parse_timestamp(timestamp: &[u8]) -> SlpResult<Time> {
     #[inline(always)]
     const fn conv(n: u8) -> u8 { n - b'0' }
 
-    if timestamp.len() < 19 { return Err(SlpError::InvalidFile) }
+    if timestamp.len() < 19 { return Err(SlpError::InvalidFile(InvalidLocation::Metadata)) }
 
     let d1 = conv(timestamp[0]) as u16;
     let d2 = conv(timestamp[1]) as u16;
@@ -636,237 +822,3 @@ fn parse_timestamp(timestamp: &[u8]) -> SlpResult<Time> {
 
     Ok(Time(time))
 }
-
-fn parse_item_update(stream: &mut Stream, info: &StreamInfo) -> SlpResult<Item> {
-    // note: takes a byte here
-    let substream = info.create_event_stream(ITEM_UPDATE, stream)?;
-    let bytes = substream.as_slice();
-
-    if bytes.len() < 0x2A {
-        return Err(SlpError::InvalidFile);
-    }
-
-    let type_id = u16::from_be_bytes(bytes[0x04..0x06].try_into().unwrap());
-    let state = bytes[0x06];
-    let direction_f = f32::from_be_bytes(bytes[0x07..0x0B].try_into().unwrap());
-    let direction = if direction_f == 1.0 { Direction::Right } else { Direction::Left };
-    let position = Vector {
-        x: f32::from_be_bytes(bytes[0x13..0x17].try_into().unwrap()),
-        y: f32::from_be_bytes(bytes[0x17..0x1B].try_into().unwrap()),
-    };
-    let missile_type = bytes[0x25];
-    let turnip_type = bytes[0x26];
-    let charge_shot_launched = bytes[0x27] == 1;
-    let charge_shot_power = bytes[0x28];
-    let owner = bytes[0x29] as i8;
-    let spawn_id = u32::from_be_bytes(bytes[0x21..0x25].try_into().unwrap());
-
-    Ok(Item {
-        type_id,
-        state,
-        direction,
-        position,
-        missile_type,
-        turnip_type,
-        charge_shot_launched,
-        charge_shot_power,
-        spawn_id,
-        owner,
-    })
-}
-
-fn parse_pre_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<PreFrameInfo> {
-    let substream = info.create_event_stream(PRE_FRAME_UPDATE, stream)?;
-    let bytes = substream.as_slice();
-
-    if bytes.len() < 0x2C {
-        return Err(SlpError::InvalidFile);
-    }
-
-    let port_idx = bytes[0x4];
-    let analog_trigger_value = f32::from_be_bytes(bytes[0x28..0x2C].try_into().unwrap());
-    let left_stick_coords = [
-        f32::from_be_bytes(bytes[0x18..0x1C].try_into().unwrap()),
-        f32::from_be_bytes(bytes[0x1C..0x20].try_into().unwrap()),
-    ];
-    let right_stick_coords = [
-        f32::from_be_bytes(bytes[0x20..0x24].try_into().unwrap()),
-        f32::from_be_bytes(bytes[0x24..0x28].try_into().unwrap()),
-    ];
-
-    let buttons_mask = u16::from_be_bytes(bytes[0x30..0x32].try_into().unwrap());
-
-    Ok(PreFrameInfo {
-        port_idx,
-        buttons_mask,
-        analog_trigger_value,
-        left_stick_coords,
-        right_stick_coords,
-    })
-}
-
-fn parse_post_frame_info(stream: &mut Stream, info: &StreamInfo) -> SlpResult<PostFrameInfo> {
-    let substream = info.create_event_stream(POST_FRAME_UPDATE, stream)?;
-    let bytes = substream.as_slice();
-
-    if bytes.len() < 0x44 {
-        return Err(SlpError::InvalidFile);
-    }
-
-    let port_idx = bytes[0x4];
-    let character = Character::from_u8_internal(bytes[0x6])
-        .ok_or(SlpError::InvalidFile)?;
-
-    let direction_f = f32::from_be_bytes(bytes[0x11..0x15].try_into().unwrap());
-    let direction = if direction_f == 1.0 { Direction::Right } else { Direction::Left };
-
-    let velocity = Vector {
-        x: f32::from_be_bytes(bytes[0x34..0x38].try_into().unwrap()),
-        y: f32::from_be_bytes(bytes[0x38..0x3c].try_into().unwrap()),
-    };
-    let hit_velocity = Vector {
-        x: f32::from_be_bytes(bytes[0x3C..0x40].try_into().unwrap()),
-        y: f32::from_be_bytes(bytes[0x40..0x44].try_into().unwrap()),
-    };
-    let ground_x_velocity = f32::from_be_bytes(bytes[0x44..0x48].try_into().unwrap());
-    let position = Vector {
-        x: f32::from_be_bytes(bytes[0x9..0xD].try_into().unwrap()),
-        y: f32::from_be_bytes(bytes[0xD..0x11].try_into().unwrap()),
-    };
-    let state_num = u16::from_be_bytes(bytes[0x7..0x9].try_into().unwrap());
-    let state = ActionState::from_u16(state_num, character)?;
-    let percent = f32::from_be_bytes(bytes[0x15..0x19].try_into().unwrap());
-    let shield_size = f32::from_be_bytes(bytes[0x19..0x1D].try_into().unwrap());
-    let last_hitting_attack_id = bytes[0x1D] as u16;
-    let stock_count = bytes[0x20];
-    let anim_frame = f32::from_be_bytes(bytes[0x21..0x25].try_into().unwrap());
-    let hitlag_frames = f32::from_be_bytes(bytes[0x48..0x4C].try_into().unwrap());
-    let hitstun_misc = f32::from_be_bytes(bytes[0x2A..0x2E].try_into().unwrap());
-    let is_airborne = bytes[0x2E] == 1;
-    let last_ground_idx = u16::from_be_bytes(bytes[0x2F..0x31].try_into().unwrap());
-    let state_flags = bytes[0x25..0x2A].try_into().unwrap();
-    let last_hit_by_instance_id = u16::from_be_bytes(bytes[0x50..0x52].try_into().unwrap());
-
-    Ok(PostFrameInfo {
-        port_idx,
-        character,
-        direction,
-        position,
-        velocity,
-        hit_velocity,
-        ground_x_velocity,
-        state,
-        state_num,
-        anim_frame,
-        shield_size,
-        stock_count,
-        is_airborne,
-        percent,
-        hitlag_frames,
-        last_ground_idx,
-        hitstun_misc,
-        state_flags,
-        last_hitting_attack_id,
-        last_hit_by_instance_id,
-    })
-}
-
-fn parse_event_payloads(stream: &mut Stream) -> SlpResult<StreamInfo> {
-    if stream.take_u8() != Ok(EVENT_PAYLOADS) { return Err(SlpError::InvalidFile) }
-    
-    let info_size = stream.take_u8()?;
-    let event_count = (info_size - 1) / 3;
-
-    let mut event_payload_sizes = [0; 255];
-    for _ in 0..event_count {
-        let command_byte = stream.take_u8()?;
-        let payload_size = stream.take_u16()?;
-        event_payload_sizes[command_byte as usize] = payload_size;
-    }
-
-    Ok(StreamInfo {
-        event_payload_sizes
-    })
-}
-
-pub type SubStream<'a> = Stream<'a>;
-
-#[derive(Copy, Clone)]
-pub struct Stream<'a> {
-    bytes: &'a [u8],
-}
-
-impl<'a> Stream<'a> {
-    pub fn new(bytes: &'a [u8]) -> Self {
-        Stream {
-            bytes,
-        }
-    }
-
-    pub fn as_slice(self) -> &'a [u8] {
-        self.bytes
-    }
-
-    pub fn take_u8(&mut self) -> SlpResult<u8> {
-        match self.bytes {
-            [b, rest @ ..] => {
-                self.bytes = rest;
-                Ok(*b)
-            }
-            _ => Err(SlpError::InvalidFile)
-        }
-    }
-
-    pub fn take_bool(&mut self) -> SlpResult<bool> {
-        let byte = self.take_u8()?;
-        if byte > 1 { return Err(SlpError::InvalidFile) }
-        Ok(unsafe { std::mem::transmute(byte) })
-    }
-
-    pub fn take_u16(&mut self) -> SlpResult<u16> {
-        self.take_const_n::<2>()
-            .map(|data| u16::from_be_bytes(*data))
-    }
-
-    pub fn take_u32(&mut self) -> SlpResult<u32> {
-        self.take_const_n::<4>()
-            .map(|data| u32::from_be_bytes(*data))
-    }
-
-    pub fn take_i32(&mut self) -> SlpResult<i32> {
-        self.take_const_n::<4>()
-            .map(|data| i32::from_be_bytes(*data))
-    }
-
-    pub fn take_float(&mut self) -> SlpResult<f32> {
-        self.take_const_n::<4>()
-            .map(|data| f32::from_be_bytes(*data))
-    }
-
-    pub fn take_n(&mut self, n: usize) -> SlpResult<&'a [u8]> {
-        if n > self.bytes.len() { return Err(SlpError::InvalidFile) }
-
-        let (ret, new_bytes) = self.bytes.split_at(n);
-        self.bytes = new_bytes;
-        Ok(ret)
-    }
-
-    /// return size optimization, may not be needed but simple to add
-    pub fn take_const_n<const N: usize>(&mut self) -> SlpResult<&'a [u8; N]> {
-        if N > self.bytes.len() { return Err(SlpError::InvalidFile) }
-        
-        let ret = unsafe { &*(self.bytes.as_ptr() as *const [u8; N]) };
-        self.bytes = &self.bytes[N..];
-        Ok(ret)
-    }
-
-    pub fn sub_stream(&mut self, size: usize) -> SubStream<'a> {
-        let (sub, new_self) = self.bytes.split_at(size);
-        self.bytes = new_self;
-        Stream {
-            bytes: sub
-        }
-    }
-}
-
-fn read_u32(b: &[u8]) -> u32 { u32::from_be_bytes(b[0..4].try_into().unwrap()) }

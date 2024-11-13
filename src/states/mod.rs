@@ -1,7 +1,7 @@
 mod special_states;
 pub use special_states::*;
 
-use crate::{SlpResult, SlpError, Character};
+use crate::{SlpResult, SlpError, Character, InvalidLocation};
 
 // It is very useful to abstract away special moves from standard moves, 
 // since they need to be parsed separatately and differently per character.
@@ -258,7 +258,7 @@ impl StandardActionState {
         } else {
             //eprintln!("unknown state id: {}", st);
             //StandardActionState::Passive // TODO:
-            Err(SlpError::InvalidFile)
+            Err(SlpError::InvalidFile(InvalidLocation::ParseActionState))
         }
     }
 
