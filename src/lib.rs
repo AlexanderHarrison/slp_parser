@@ -180,8 +180,8 @@ impl Game {
 
     /// Returns None if not a two player game
     pub fn low_high_ports(&self) -> Option<(usize, usize)> {
-        let low_port = None;
-        let high_port = None;
+        let mut low_port = None;
+        let mut high_port = None;
 
         for i in 0..4 {
             if self.info.port_used[i] {
