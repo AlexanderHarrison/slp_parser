@@ -1,6 +1,6 @@
 use crate::{Action, BroadState, SpecialBroadState, ActionState, SpecialActionState, 
-    SpecialHighLevelAction, SlpError, SlpResult, JumpType, ParseError, 
-    ActionBuilder, HighLevelAction};
+    SpecialHighLevelAction, SlpError, SlpResult, JumpType, ParseError, ActionBuilder, 
+    HighLevelAction, InvalidLocation};
 use std::fmt;
 
 // HOW TO ADD: get char anim map using example
@@ -60,7 +60,7 @@ macro_rules! special_states {
             pub fn from_u16(n: u16) -> SlpResult<Self> {
                 match n {
                     $($n => Ok($sas::$nm),)*
-                    _ => Err(SlpError::InvalidFile)
+                    _ => Err(SlpError::InvalidFile(InvalidLocation::ParseActionState))
                 }
             }
 
