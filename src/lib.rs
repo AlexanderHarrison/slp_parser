@@ -522,30 +522,38 @@ pub fn write_notes_to_game(path: &Path, notes: &Notes) -> SlpResult<()> {
 //    interactions.into_boxed_slice()
 //}
 //
-//use std::fmt;
+use std::fmt;
 //impl fmt::Display for Action {
 //    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 //        write!(f, "{:10}: {:15} {} -> {}", self.start_state, self.action_taken, self.frame_start, self.frame_end)
 //    }
 //}
 //
-//impl fmt::Display for SlpError {
-//    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//        write!(f, "{}", match self {
-//            SlpError::OutdatedFile => format!(
-//                "Outdated slp file. A version >= {}.{}.0 is required.",
-//                MIN_VERSION_MAJOR,
-//                MIN_VERSION_MINOR,
-//            ),
-//            SlpError::TooNewFile => "Slp file is too new and unsupported.".to_owned(),
-//            SlpError::InvalidFileSlpz => "Invalid slpz file.".to_owned(),
-//            SlpError::InvalidFile => "Invalid slp file.".to_owned(),
-//            SlpError::ZstdInitError => "Failed to init zstd.".to_owned(),
-//            SlpError::FileDoesNotExist => "File does not exist.".to_owned(),
-//            SlpError::IOError => "Error reading file.".to_owned(),
-//        })
-//    }
-//}
+impl fmt::Display for SlpError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", match self {
+            SlpError::OutdatedFile => format!(
+                "Outdated slp file. A version >= {}.{}.0 is required.",
+                MIN_VERSION_MAJOR,
+                MIN_VERSION_MINOR,
+            ),
+            SlpError::NotAnSlpFile => "file is not a Slippi Replay (.slp) file".to_owned(),
+            SlpError::InvalidFile(InvalidLocation::SlpzDecompression) => "Slpz file is invalid and could not be decompressed".to_owned(),
+            SlpError::InvalidFile(InvalidLocation::Metadata) => "Slp file is invalid: metadata could not be parsed".to_owned(),
+            SlpError::InvalidFile(InvalidLocation::EventSizes) => "Slp file is invalid: Payload Sizes event could not be parsed".to_owned(),
+            SlpError::InvalidFile(InvalidLocation::GameStart) => "Slp file is invalid: Game Start event could not be parsed".to_owned(),
+            SlpError::InvalidFile(InvalidLocation::ItemUpdate) => "Slp file is invalid: Item Update event could not be parsed".to_owned(),
+            SlpError::InvalidFile(InvalidLocation::PreFrameUpdate) => "Slp file is invalid: Pre Frame Update event could not be parsed".to_owned(),
+            SlpError::InvalidFile(InvalidLocation::PostFrameUpdate) => "Slp file is invalid: Post Frame Update event could not be parsed".to_owned(),
+            SlpError::InvalidFile(InvalidLocation::StadiumTransformation) => "Slp file is invalid: Stadium Transformation event could not be parsed".to_owned(),
+            SlpError::InvalidFile(InvalidLocation::ParseActionState) => "Slp file is invalid: invalid ActionState event could not be parsed".to_owned(),
+            SlpError::TooNewFile => "Slp file is too new and unsupported.".to_owned(),
+            SlpError::ZstdInitError => "Failed to init zstd.".to_owned(),
+            SlpError::FileDoesNotExist => "File does not exist.".to_owned(),
+            SlpError::IOError => "Error reading file.".to_owned(),
+        })
+    }
+}
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Vector {
