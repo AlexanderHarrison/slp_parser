@@ -112,6 +112,7 @@ pub struct ItemUpdate {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct GameInfo {
     pub stage: Stage,
+    pub port_used: [bool; 4],
     pub starting_character_colours: [Option<CharacterColour>; 4],
     pub names: [[u8; 31]; 4],
     pub connect_codes: [[u8; 10]; 4],

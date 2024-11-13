@@ -650,6 +650,7 @@ pub fn parse_file_info_slpz(reader: &mut (impl std::io::Read + std::io::Seek)) -
 fn merge_metadata(game_start: GameStart, metadata: Metadata) -> GameInfo {
     GameInfo {
         stage                      : game_start.stage,
+        port_used                  : game_start.starting_character_colours.map(|c| c.is_some()),
         starting_character_colours : game_start.starting_character_colours,
         start_time                 : metadata.time,
         names                      : game_start.names,
