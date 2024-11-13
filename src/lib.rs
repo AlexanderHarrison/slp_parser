@@ -177,6 +177,26 @@ impl Game {
         let end = self.item_idx[frame+1] as usize;
         &self.items[start..end]
     }
+
+    /// Returns None if not a two player game
+    pub fn low_high_ports(&self) -> Option<(usize, usize)> {
+        let low_port = None;
+        let high_port = None;
+
+        for i in 0..4 {
+            if self.info.port_used[i] {
+                if low_port.is_none() {
+                    low_port = Some(i);
+                } else if high_port.is_none() {
+                    high_port = Some(i);
+                } else {
+                    return None;
+                }
+            }
+        }
+
+        low_port.zip(high_port)
+    }
 }
 
 #[derive(Clone, Debug)]
