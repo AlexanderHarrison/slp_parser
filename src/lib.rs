@@ -154,6 +154,7 @@ pub struct GameStart {
 
 #[derive(Clone, Debug)]
 pub struct Game {
+    pub frame_count: usize,
     pub frames: [Option<Box<[Frame]>>; 4],
     pub follower_frames: [Option<Box<[Frame]>>; 4],
 

@@ -242,7 +242,10 @@ pub fn parse_file(slp: &[u8]) -> SlpResult<(Game, Notes)> {
         }
     }
 
+    let frame_count = frames.iter().find(|f| f.is_some()).unwrap().as_ref().unwrap().len();
+
     let game = Game {
+        frame_count,
         frames,
         follower_frames,
         item_idx: item_idx.into(),
