@@ -84,6 +84,7 @@ pub struct Frame {
     pub hitstun_misc: f32, // char state var 1
     pub percent: f32,
     pub stock_count: u8,
+    pub jumps_remaining: u8,
     pub is_airborne: bool,
     pub hitlag_frames: f32,
     pub last_ground_idx: u16,
