@@ -216,13 +216,13 @@ pub struct Interaction {
 
 #[derive(Clone, Debug)]
 pub struct SlpFileInfo {
-    pub path: Box<Path>,
+    pub name: Box<std::ffi::OsStr>,
     pub info: GameInfo,
 }
 
 #[derive(Clone, Debug)]
 pub struct Folder {
-    pub path: Box<Path>,
+    pub name: Box<std::ffi::OsStr>,
     //pub slp_count: u32,
     //pub folder_count: u32,
 }
@@ -243,11 +243,10 @@ enum SlpDirEntryType {
     Other,
 }
 
-fn entry_type(entry: &std::fs::DirEntry) -> SlpResult<SlpDirEntryType> {
+fn entry_type(entry: &std::fs::DirEntry, filename: &std::ffi::OsStr) -> SlpResult<SlpDirEntryType> {
     let file_type = entry.file_type()?;
     if file_type.is_file() {
-        let path = entry.path();
-        let ex = path.extension();
+        let ex = std::path::Path::new(filename).extension();
         if ex == Some(std::ffi::OsStr::new("slp")) {
             Ok(SlpDirEntryType::SlpFile)
         } else if ex == Some(std::ffi::OsStr::new("slpz")) {
@@ -267,20 +266,27 @@ pub fn read_info_in_dir(
     path: impl AsRef<Path>,
     prev: &mut SlpDirectoryInfo
 ) -> SlpResult<()> {
+    let path = path.as_ref();
+
     prev.slp_files.clear();
     prev.folders.clear();
     let mut hash = 0;
 
     let mut skipped = 0usize;
 
+    let mut path_buf = std::path::PathBuf::new();
     for entry in std::fs::read_dir(path)? {
         let entry = entry?;
-        match entry_type(&entry)? {
+        let filename = entry.file_name();
+        match entry_type(&entry, &filename)? {
             SlpDirEntryType::SlpFile | SlpDirEntryType::SlpzFile => {
-                let game_path = entry.path();
-                hash ^= simple_hash(game_path.as_os_str().as_encoded_bytes());
+                hash ^= simple_hash(filename.as_os_str().as_encoded_bytes());
 
-                let info = match read_info(&game_path) {
+                path_buf.clear();
+                path_buf.push(path);
+                path_buf.push(&filename);
+
+                let info = match read_info(&path_buf) {
                     Ok(info) => info,
                     Err(_) => {
                         skipped += 1;
@@ -289,18 +295,17 @@ pub fn read_info_in_dir(
                 };
 
                 prev.slp_files.push(SlpFileInfo {
-                    path: game_path.into_boxed_path(),
+                    name: filename.into_boxed_os_str(),
                     info,
                 });
             }
             SlpDirEntryType::Directory => {
-                let folder_path = entry.path();
-                hash ^= simple_hash(folder_path.as_os_str().as_encoded_bytes());
+                hash ^= simple_hash(filename.as_os_str().as_encoded_bytes());
                 prev.folders.push(Folder {
-                    path: folder_path.into_boxed_path(),
+                    name: filename.into_boxed_os_str(),
                 });
             }
-            _ => (),
+            SlpDirEntryType::Other => (),
         }
     }
 
@@ -315,14 +320,10 @@ pub fn dir_hash(path: impl AsRef<Path>) -> SlpResult<u64> {
 
     for entry in std::fs::read_dir(path)? {
         let entry = entry?;
-        match entry_type(&entry)? {
-            SlpDirEntryType::SlpFile | SlpDirEntryType::SlpzFile => {
-                let game_path = entry.path();
-                hash ^= simple_hash(game_path.as_os_str().as_encoded_bytes());
-            }
-            SlpDirEntryType::Directory => {
-                let folder_path = entry.path();
-                hash ^= simple_hash(folder_path.as_os_str().as_encoded_bytes());
+        let filename = entry.file_name();
+        match entry_type(&entry, &filename)? {
+            SlpDirEntryType::SlpFile | SlpDirEntryType::SlpzFile | SlpDirEntryType::Directory => {
+                hash ^= simple_hash(filename.as_os_str().as_encoded_bytes());
             }
             SlpDirEntryType::Other => (),
         }
