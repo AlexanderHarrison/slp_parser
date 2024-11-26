@@ -118,6 +118,8 @@ pub struct GameInfo {
     pub names: [[u8; 31]; 4],
     pub connect_codes: [[u8; 10]; 4],
     pub start_time: Time,
+    /// In seconds. Zero if n/a.
+    pub timer: u32,
     pub duration: i32,
 }
 
@@ -149,6 +151,7 @@ impl GameInfo {
 pub struct GameStart {
     pub stage: Stage,
     pub starting_character_colours: [Option<CharacterColour>; 4],
+    pub timer: u32,
     pub names: [[u8; 31]; 4],
     pub connect_codes: [[u8; 10]; 4],
 }

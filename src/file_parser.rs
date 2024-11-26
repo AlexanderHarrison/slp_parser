@@ -273,6 +273,8 @@ fn parse_game_start(game_start: &[u8]) -> SlpResult<GameStart> {
 
     let stage = Stage::from_u16(read_u16(game_info_block, 0xE))
         .ok_or(SlpError::InvalidFile(InvalidLocation::GameStart))?;
+
+    let timer = read_u32(game_info_block, 0x10);
     
     let mut starting_character_colours = [None; 4];
     let mut names = [[0u8; 31]; 4];
@@ -294,6 +296,7 @@ fn parse_game_start(game_start: &[u8]) -> SlpResult<GameStart> {
     Ok(GameStart {
         stage,
         starting_character_colours,
+        timer,
         names,
         connect_codes,
     })
@@ -661,6 +664,7 @@ fn merge_metadata(game_start: GameStart, metadata: Metadata) -> GameInfo {
         port_used                  : game_start.starting_character_colours.map(|c| c.is_some()),
         starting_character_colours : game_start.starting_character_colours,
         start_time                 : metadata.time,
+        timer                      : game_start.timer,
         names                      : game_start.names,
         connect_codes              : game_start.connect_codes,
         duration                   : metadata.duration,
