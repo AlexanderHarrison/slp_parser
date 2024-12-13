@@ -764,7 +764,6 @@ pub fn parse_notes(metadata: &[u8]) -> Notes {
             let data_len_idx = arr_i + name.len() + BINARY_ARRAY_PREFACE.len();
             let data_len = read_u32(bytes, data_len_idx) as usize;
             let data_start = data_len_idx + 4;
-            dbg!(data_len);
             image_compressed_data = bytes[data_start..][..data_len].to_vec();
 
             // bytes = &bytes[data_start+data_len..];
@@ -840,7 +839,6 @@ pub fn write_notes(buffer: &mut Vec<u8>, notes: &Notes) {
 
     write_field(buffer, "imageCompressedData");
     buffer.extend_from_slice(b"[$U#l");
-    dbg!(notes.image_compressed_data.len() as i32);
     buffer.extend_from_slice(&(notes.image_compressed_data.len() as u32).to_be_bytes());
     buffer.extend_from_slice(notes.image_compressed_data.as_slice());
     buffer.push(b']');
