@@ -671,12 +671,16 @@ fn merge_metadata(game_start: GameStart, metadata: Metadata) -> GameInfo {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Notes {
     pub data: String,
     pub start_frames: Vec<i32>,
     pub frame_lengths: Vec<i32>,
     pub data_idx: Vec<i32>,
+
+    // -1 if no image
+    pub image_data_offsets: Vec<i32>,
+    pub image_compressed_data: Vec<u8>,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -712,38 +716,59 @@ pub fn parse_notes(metadata: &[u8]) -> Notes {
     let mut start_frames = Vec::new();
     let mut frame_lengths = Vec::new();
     let mut data_idx = Vec::new();
+    let mut image_data_offsets = Vec::new();
+    let mut image_compressed_data = Vec::new();
 
     if let Some(i) = metadata.windows(5).position(|w| w == b"notes") {
         let mut bytes = &metadata[i..];
         let count_i = bytes.windows(5).position(|w| w == b"count").unwrap();
         let count = i32::from_be_bytes(bytes[(count_i+6)..(count_i+10)].try_into().unwrap()) as usize;
 
-        start_frames.reserve_exact(count);
-        frame_lengths.reserve_exact(count);
-        data_idx.reserve_exact(count);
-
         let data_i = bytes.windows(4).position(|w| w == b"data").unwrap();
         let data_len = i32::from_be_bytes(bytes[(data_i+6)..(data_i+10)].try_into().unwrap()) as usize;
         data = std::str::from_utf8(&bytes[(data_i+10)..(data_i+10+data_len)]).unwrap().to_string();
         bytes = &bytes[(data_i+data_len+10)..];
 
-        fn parse_array(bytes: &[u8], count: usize, vec: &mut Vec<i32>, name: &[u8]) -> usize {
-            let arr_i = bytes.windows(name.len()).position(|w| w == name).unwrap();
+        fn parse_array(bytes: &[u8], count: usize, vec: &mut Vec<i32>, name: &[u8]) -> Option<usize> {
+            vec.reserve_exact(count);
+
+            let arr_i = bytes.windows(name.len()).position(|w| w == name)?;
             let end = arr_i+name.len()+1+count*5;
             let data = &bytes[(arr_i+name.len()+1)..end];
 
             for c in data.chunks(5) {
-                vec.push(i32::from_be_bytes(c[1..].try_into().unwrap()))
+                vec.push(i32::from_be_bytes(c[1..].try_into().ok()?))
             }
 
-            end
+            Some(end)
         }
 
-        let end = parse_array(bytes, count, &mut start_frames, b"startFrames");
+        // These fields are guaranteed, so we can safely unwrap them
+        let end = parse_array(bytes, count, &mut start_frames, b"startFrames").unwrap();
         bytes = &bytes[end..];
-        let end = parse_array(bytes, count, &mut frame_lengths, b"frameLengths");
+        let end = parse_array(bytes, count, &mut frame_lengths, b"frameLengths").unwrap();
         bytes = &bytes[end..];
-        parse_array(bytes, count, &mut data_idx, b"dataStart");
+        parse_array(bytes, count, &mut data_idx, b"dataStart").unwrap();
+
+        if let Some(end) = parse_array(bytes, count, &mut image_data_offsets, b"imageDataOffsets") { bytes = &bytes[end..] }
+
+        // parse compressed image data, which is a raw binary array.
+        // Unlike the other fields, which start with a length, then type, this is a UBJSON
+        // specific array, where you specify the type and count of the array, 
+        // then fill it without specifying types for each element.
+        // This is exactly the same layout mode as the 'raw' field in the slp spec.
+        let name = b"imageCompressedData";
+        if let Some(arr_i) = bytes.windows(name.len()).position(|w| w == name) {
+            const BINARY_ARRAY_PREFACE: &'static [u8] = b"[$U#l";
+
+            let data_len_idx = arr_i + name.len() + BINARY_ARRAY_PREFACE.len();
+            let data_len = read_u32(bytes, data_len_idx) as usize;
+            let data_start = data_len_idx + 4;
+            dbg!(data_len);
+            image_compressed_data = bytes[data_start..][..data_len].to_vec();
+
+            // bytes = &bytes[data_start+data_len..];
+        }
     }
 
     Notes {
@@ -751,6 +776,9 @@ pub fn parse_notes(metadata: &[u8]) -> Notes {
         start_frames,
         frame_lengths,
         data_idx,
+
+        image_data_offsets,
+        image_compressed_data,
     }
 }
 
@@ -803,6 +831,20 @@ pub fn write_notes(buffer: &mut Vec<u8>, notes: &Notes) {
     }
     buffer.push(b']');
 
+    write_field(buffer, "imageDataOffsets");
+    buffer.push(b'[');
+    for f in notes.image_data_offsets.iter().copied() {
+        write_i32(buffer, f);
+    }
+    buffer.push(b']');
+
+    write_field(buffer, "imageCompressedData");
+    buffer.extend_from_slice(b"[$U#l");
+    dbg!(notes.image_compressed_data.len() as i32);
+    buffer.extend_from_slice(&(notes.image_compressed_data.len() as u32).to_be_bytes());
+    buffer.extend_from_slice(notes.image_compressed_data.as_slice());
+    buffer.push(b']');
+
     buffer.push(b'}');
 }
 
@@ -834,4 +876,55 @@ fn parse_timestamp(timestamp: &[u8]) -> SlpResult<Time> {
         | ((second as u64) << 8);
 
     Ok(Time(time))
+}
+
+#[test]
+fn notes_no_image_fields() {
+    // This metadata does not include image_* fields. We want to ensure the new version is
+    // backwards compatible with older notes.
+    // TODO: maybe switch to include_bytes?
+    let metadata: [u8; 0x93] = [
+        0x55, 0x05, 0x6E, 0x6F, 0x74, 0x65, 0x73, 0x7B, 0x55, 0x05, 0x63, 0x6F, 0x75, 0x6E, 0x74, 0x6C, 
+        0x00, 0x00, 0x00, 0x02, 0x55, 0x04, 0x64, 0x61, 0x74, 0x61, 0x53, 0x6C, 0x00, 0x00, 0x00, 0x28, 
+        0x54, 0x68, 0x69, 0x73, 0x20, 0x69, 0x73, 0x20, 0x6E, 0x6F, 0x74, 0x65, 0x73, 0x20, 0x70, 0x61, 
+        0x72, 0x74, 0x20, 0x31, 0x54, 0x68, 0x69, 0x73, 0x20, 0x69, 0x73, 0x20, 0x6E, 0x6F, 0x74, 0x65, 
+        0x73, 0x20, 0x70, 0x61, 0x72, 0x74, 0x20, 0x32, 0x55, 0x0B, 0x73, 0x74, 0x61, 0x72, 0x74, 0x46, 
+        0x72, 0x61, 0x6D, 0x65, 0x73, 0x5B, 0x6C, 0x00, 0x00, 0x00, 0xC8, 0x6C, 0x00, 0x00, 0x00, 0x64, 
+        0x5D, 0x55, 0x0C, 0x66, 0x72, 0x61, 0x6D, 0x65, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x73, 0x5B, 
+        0x6C, 0x00, 0x00, 0x00, 0x0A, 0x6C, 0x00, 0x00, 0x00, 0x00, 0x5D, 0x55, 0x09, 0x64, 0x61, 0x74, 
+        0x61, 0x53, 0x74, 0x61, 0x72, 0x74, 0x5B, 0x6C, 0x00, 0x00, 0x00, 0x00, 0x6C, 0x00, 0x00, 0x00, 
+        0x14, 0x5D, 0x7D, 
+    ];
+
+    let expected_notes = Notes {
+        data: String::from("This is notes part 1This is notes part 2"),
+        start_frames: vec![200, 100],
+        frame_lengths: vec![10, 0],
+        data_idx: vec![0, 20],
+        image_data_offsets: vec![],
+        image_compressed_data: vec![],
+    };
+
+    let parsed_notes = parse_notes(&metadata);
+
+    assert_eq!(expected_notes, parsed_notes);
+}
+
+#[test]
+fn notes_round_trip() {
+    let notes = Notes {
+        data: String::from("This is notes part 1This is notes part 2"),
+        start_frames: vec![200, 100],
+        frame_lengths: vec![10, 0],
+        data_idx: vec![0, 20],
+        image_data_offsets: vec![0, 3],
+        image_compressed_data: vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    };
+
+    let mut buf = Vec::new();
+    write_notes(&mut buf, &notes);
+    std::fs::write("test.metadata", buf.as_slice()).unwrap();
+    let round_trip_notes = parse_notes(&buf);
+
+    assert_eq!(notes, round_trip_notes);
 }
