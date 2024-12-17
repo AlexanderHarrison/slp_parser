@@ -616,6 +616,7 @@ pub fn parse_file_info(reader: &mut (impl std::io::Read + std::io::Seek)) -> Slp
     reader.seek(std::io::SeekFrom::Start(metadata_offset as u64))?;
     let read_count = reader.read(&mut buf)?;
 
+    // this will truncate the metadata if it contains diagrams, but that is perfectly fine, nothing we need is there.
     let metadata = parse_metadata(&buf[..read_count]);
 
     Ok(merge_metadata(game_start, metadata))
@@ -641,10 +642,7 @@ pub fn parse_file_info_slpz(reader: &mut (impl std::io::Read + std::io::Seek)) -
     let metadata_offset = read_u32(&buf, 12) as usize;
     let compressed_events_offset = read_u32(&buf, 16) as usize;
 
-    // TODO
-    assert!(compressed_events_offset < 4096);
-
-    while read_count < compressed_events_offset {
+    while read_count < compressed_events_offset && read_count != buf.len() {
         let read = reader.read(&mut buf[read_count..])?;
         if read == 0 { break } // file smaller than buffer
         read_count += read;
@@ -653,7 +651,9 @@ pub fn parse_file_info_slpz(reader: &mut (impl std::io::Read + std::io::Seek)) -
     let EventSizesRet { game_start_offset: _, event_sizes } = event_sizes(&buf, event_sizes_offset)?;
     let game_start_size = event_sizes[GAME_START as usize] as usize + 1;
     let game_start = parse_game_start(&buf[game_start_offset..][..game_start_size])?;
-    let metadata = parse_metadata(&buf[metadata_offset..compressed_events_offset]);
+
+    // this will truncate the metadata if it contains diagrams, but that is perfectly fine, nothing we need is there.
+    let metadata = parse_metadata(&buf[metadata_offset..]);
 
     Ok(merge_metadata(game_start, metadata))
 }
@@ -678,8 +678,12 @@ pub struct Notes {
     pub frame_lengths: Vec<i32>,
     pub data_idx: Vec<i32>,
 
-    // -1 if no image
+    // empty range if no image
     pub image_data_offsets: Vec<i32>,
+
+    // Each segment (image_data_offsets[i]..image_data_offsets[i+1]) starts with 
+    // a big endian (version, width, height, uncompressed_size) header. 16 bytes total.
+    // The rest is compressed image data.
     pub image_compressed_data: Vec<u8>,
 }
 
@@ -689,6 +693,7 @@ pub struct Metadata {
     pub time: Time,
 }
 
+// expects the natural part of the metadata, the notes and diagrams need not be included.
 fn parse_metadata(bytes: &[u8]) -> Metadata {
     let time;
     if let Some(i) = bytes.windows(7).position(|w| w == b"startAt") {
