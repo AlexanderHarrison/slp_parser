@@ -673,13 +673,18 @@ fn merge_metadata(game_start: GameStart, metadata: Metadata) -> GameInfo {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Notes {
+    // ---------- text notes ---------- //
+
     pub data: String,
     pub start_frames: Vec<i32>,
     pub frame_lengths: Vec<i32>,
     pub data_idx: Vec<i32>,
 
-    // empty range if no image
+    // ---------- images ---------- //
+
     pub image_data_offsets: Vec<i32>,
+    pub image_start_frames: Vec<i32>,
+    pub image_frame_lengths: Vec<i32>,
 
     // Each segment (image_data_offsets[i]..image_data_offsets[i+1]) starts with 
     // a big endian (version, width, height, uncompressed_size) header. 16 bytes total.
@@ -722,31 +727,54 @@ pub fn parse_notes(metadata: &[u8]) -> Notes {
     let mut frame_lengths = Vec::new();
     let mut data_idx = Vec::new();
     let mut image_data_offsets = Vec::new();
+    let mut image_start_frames = Vec::new();
+    let mut image_frame_lengths = Vec::new();
     let mut image_compressed_data = Vec::new();
 
-    if let Some(i) = metadata.windows(5).position(|w| w == b"notes") {
-        let mut bytes = &metadata[i..];
-        let count_i = bytes.windows(5).position(|w| w == b"count").unwrap();
-        let count = i32::from_be_bytes(bytes[(count_i+6)..(count_i+10)].try_into().unwrap()) as usize;
+    fn parse_object_header(bytes: &[u8], name: &[u8]) -> Option<usize> {
+        let data_i = bytes.windows(name.len()).position(|w| w == name)?;
+        Some(data_i+name.len()+1)
+    }
 
-        let data_i = bytes.windows(4).position(|w| w == b"data").unwrap();
-        let data_len = i32::from_be_bytes(bytes[(data_i+6)..(data_i+10)].try_into().unwrap()) as usize;
-        data = std::str::from_utf8(&bytes[(data_i+10)..(data_i+10+data_len)]).unwrap().to_string();
-        bytes = &bytes[(data_i+data_len+10)..];
+    fn parse_string(bytes: &[u8], name: &[u8]) -> Option<(usize, String)> {
+        let data_i = bytes.windows(name.len()).position(|w| w == name)?;
+        let data_len = i32::from_be_bytes(bytes[data_i+name.len()+2..][..4].try_into().unwrap()) as usize;
+        let data = std::str::from_utf8(&bytes[data_i+name.len()+6..][..data_len]).unwrap().to_string();
+        Some((data_i+data_len+name.len()+6, data))
+    }
 
-        fn parse_array(bytes: &[u8], count: usize, vec: &mut Vec<i32>, name: &[u8]) -> Option<usize> {
-            vec.reserve_exact(count);
+    fn parse_i32(bytes: &[u8], name: &[u8]) -> Option<(usize, i32)> {
+        let count_i = bytes.windows(name.len()).position(|w| w == name)?;
+        let num = i32::from_be_bytes(bytes[count_i+name.len()+1..][..4].try_into().unwrap());
+        Some((count_i+name.len()+5, num))
+    }
 
-            let arr_i = bytes.windows(name.len()).position(|w| w == name)?;
-            let end = arr_i+name.len()+1+count*5;
-            let data = &bytes[(arr_i+name.len()+1)..end];
+    fn parse_array(bytes: &[u8], count: usize, vec: &mut Vec<i32>, name: &[u8]) -> Option<usize> {
+        vec.reserve_exact(count);
 
-            for c in data.chunks(5) {
-                vec.push(i32::from_be_bytes(c[1..].try_into().ok()?))
-            }
+        let arr_i = bytes.windows(name.len()).position(|w| w == name)?;
+        let end = arr_i+name.len()+1+count*5;
+        let data = &bytes[(arr_i+name.len()+1)..end];
 
-            Some(end)
+        for c in data.chunks(5) {
+            vec.push(i32::from_be_bytes(c[1..].try_into().ok()?))
         }
+
+        Some(end)
+    }
+
+    if let Some(i) = parse_object_header(metadata, b"notes") {
+        let mut bytes = &metadata[i..];
+
+        let (end, count) = parse_i32(bytes, b"count").unwrap();
+        let count = count as usize;
+        bytes = &bytes[end..];
+
+        let (end, parsed) = parse_string(bytes, b"data").unwrap();
+        data = parsed;
+        bytes = &bytes[end..];
+
+        // ---------- parse text notes ---------- //
 
         // These fields are guaranteed, so we can safely unwrap them
         let end = parse_array(bytes, count, &mut start_frames, b"startFrames").unwrap();
@@ -755,23 +783,34 @@ pub fn parse_notes(metadata: &[u8]) -> Notes {
         bytes = &bytes[end..];
         parse_array(bytes, count, &mut data_idx, b"dataStart").unwrap();
 
-        if let Some(end) = parse_array(bytes, count, &mut image_data_offsets, b"imageDataOffsets") { bytes = &bytes[end..] }
+        // ---------- parse images ---------- //
 
-        // parse compressed image data, which is a raw binary array.
-        // Unlike the other fields, which start with a length, then type, this is a UBJSON
-        // specific array, where you specify the type and count of the array, 
-        // then fill it without specifying types for each element.
-        // This is exactly the same layout mode as the 'raw' field in the slp spec.
-        let name = b"imageCompressedData";
-        if let Some(arr_i) = bytes.windows(name.len()).position(|w| w == name) {
-            const BINARY_ARRAY_PREFACE: &'static [u8] = b"[$U#l";
+        // if we have imageCount, then the rest of the fields will be guaranteed
+        if let Some((end, image_count)) = parse_i32(bytes, b"imageCount") {
+            let image_count = image_count as usize;
+            bytes = &bytes[end..];
 
-            let data_len_idx = arr_i + name.len() + BINARY_ARRAY_PREFACE.len();
-            let data_len = read_u32(bytes, data_len_idx) as usize;
-            let data_start = data_len_idx + 4;
-            image_compressed_data = bytes[data_start..][..data_len].to_vec();
+            let end = parse_array(bytes, image_count, &mut image_data_offsets, b"imageDataOffsets").unwrap();
+            bytes = &bytes[end..];
+            let end = parse_array(bytes, image_count, &mut image_start_frames, b"imageStartFrames").unwrap();
+            bytes = &bytes[end..];
+            let end = parse_array(bytes, image_count, &mut image_frame_lengths, b"imageFrameLengths").unwrap();
+            bytes = &bytes[end..];
 
-            // bytes = &bytes[data_start+data_len..];
+            // parse compressed image data, which is a raw binary array.
+            // Unlike the other fields, which start with a length, then type, this is a UBJSON
+            // specific array, where you specify the type and count of the array, 
+            // then fill it without specifying types for each element.
+            // This is exactly the same layout mode as the 'raw' field in the slp spec.
+            let name = b"imageCompressedData";
+            if let Some(arr_i) = bytes.windows(name.len()).position(|w| w == name) {
+                const BINARY_ARRAY_PREFACE: &'static [u8] = b"[$U#l";
+
+                let data_len_idx = arr_i + name.len() + BINARY_ARRAY_PREFACE.len();
+                let data_len = read_u32(bytes, data_len_idx) as usize;
+                let data_start = data_len_idx + 4;
+                image_compressed_data = bytes[data_start..][..data_len].to_vec();
+            }
         }
     }
 
@@ -782,12 +821,16 @@ pub fn parse_notes(metadata: &[u8]) -> Notes {
         data_idx,
 
         image_data_offsets,
+        image_start_frames,
+        image_frame_lengths,
         image_compressed_data,
     }
 }
 
 /// writes in ubjson format
 pub fn write_notes(buffer: &mut Vec<u8>, notes: &Notes) {
+    // --------- preface -------- //
+
     fn write_u8(buffer: &mut Vec<u8>, n: u8) {
         buffer.push(b'U');
         buffer.push(n);
@@ -805,6 +848,8 @@ pub fn write_notes(buffer: &mut Vec<u8>, notes: &Notes) {
 
     write_field(buffer, "notes");
     buffer.push(b'{');
+
+    // --------- text notes -------- //
 
     write_field(buffer, "count");
     write_i32(buffer, notes.start_frames.len() as i32);
@@ -835,9 +880,28 @@ pub fn write_notes(buffer: &mut Vec<u8>, notes: &Notes) {
     }
     buffer.push(b']');
 
+    // --------- images -------- //
+
+    write_field(buffer, "imageCount");
+    write_i32(buffer, notes.image_data_offsets.len() as i32);
+
     write_field(buffer, "imageDataOffsets");
     buffer.push(b'[');
     for f in notes.image_data_offsets.iter().copied() {
+        write_i32(buffer, f);
+    }
+    buffer.push(b']');
+
+    write_field(buffer, "imageStartFrames");
+    buffer.push(b'[');
+    for f in notes.image_start_frames.iter().copied() {
+        write_i32(buffer, f);
+    }
+    buffer.push(b']');
+
+    write_field(buffer, "imageFrameLengths");
+    buffer.push(b'[');
+    for f in notes.image_frame_lengths.iter().copied() {
         write_i32(buffer, f);
     }
     buffer.push(b']');
@@ -847,6 +911,8 @@ pub fn write_notes(buffer: &mut Vec<u8>, notes: &Notes) {
     buffer.extend_from_slice(&(notes.image_compressed_data.len() as u32).to_be_bytes());
     buffer.extend_from_slice(notes.image_compressed_data.as_slice());
     buffer.push(b']');
+
+    // --------- finish up -------- //
 
     buffer.push(b'}');
 }
@@ -905,6 +971,8 @@ fn notes_no_image_fields() {
         frame_lengths: vec![10, 0],
         data_idx: vec![0, 20],
         image_data_offsets: vec![],
+        image_start_frames: vec![],
+        image_frame_lengths: vec![],
         image_compressed_data: vec![],
     };
 
@@ -920,7 +988,10 @@ fn notes_round_trip() {
         start_frames: vec![200, 100],
         frame_lengths: vec![10, 0],
         data_idx: vec![0, 20],
-        image_data_offsets: vec![0, 3],
+
+        image_data_offsets: vec![0, 3, 4],
+        image_start_frames: vec![0, 1, 29343],
+        image_frame_lengths: vec![1, 0, 44],
         image_compressed_data: vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
     };
 
