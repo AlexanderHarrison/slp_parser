@@ -170,8 +170,8 @@ pub fn parse_file(slp: &[u8]) -> SlpResult<(Game, Notes)> {
                 };
 
                 // handle rollback (a little silly, but should work)
-                if arr.len() >= 8 {
-                    for i in 0..8 {
+                for i in 0..8 {
+                    if arr.len() > i {
                         let i_rev = arr.len() - i - 1;
                         if arr[i_rev].0 >= frame_idx {
                             arr.truncate(i_rev);

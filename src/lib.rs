@@ -120,6 +120,8 @@ pub struct GameInfo {
     pub start_time: Time,
     /// In seconds. Zero if n/a.
     pub timer: u32,
+
+    /// Not the frame length. Add 123 to get that.
     pub duration: i32,
 }
 
