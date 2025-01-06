@@ -1,7 +1,6 @@
 use crate::*;
 
-pub fn parse(frames: &[Frame]) -> Vec<crate::Action> {
-    println!("parse");
+pub fn parse_actions(frames: &[Frame]) -> Vec<crate::Action> {
     let mut actions = Vec::new();
     let mut consumer = ActionBuilder::new(frames);
     while !consumer.finished() {

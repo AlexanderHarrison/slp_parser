@@ -8,13 +8,16 @@ fn main() {
             println!("{:?}", fr[236].stock_count);
         }
     }
-    //let t = std::time::Instant::now();
-    //let parsed = parse_game(path, Port::Low).unwrap();
-    //let parsed2 = parse_game(path, Port::High).unwrap();
-    //println!("{:?}: {} actions", game.info.low_starting_character, parsed.len());
-    //println!("{:?}: {} actions", game.info.high_starting_character, parsed2.len());
-    //println!("in {}us", t.elapsed().as_micros());
-    //for r in parsed.into_iter() { 
-    //    println!("{}", r);
-    //}
+
+    let t = std::time::Instant::now();
+
+    if let Some((low, high)) = game.info.low_high_ports() {
+        let frames_low = &*game.frames[low].as_ref().unwrap();
+        let frames_high = &*game.frames[high].as_ref().unwrap();
+        let parsed_low = slp_parser::parse_actions(frames_low);
+        let parsed_high = slp_parser::parse_actions(frames_high);
+        println!("{:?}: {} actions", frames_low[0].character, parsed_low.len());
+        println!("{:?}: {} actions", frames_high[0].character, parsed_high.len());
+        println!("in {}us", t.elapsed().as_micros());
+    }
 }

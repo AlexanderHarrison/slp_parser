@@ -474,28 +474,6 @@ pub fn write_notes_to_game(path: &Path, notes: &Notes) -> SlpResult<()> {
     Ok(())
 }
 
-//pub fn parse_game(game: &Path, port: Port) -> SlpResult<Box<[Action]>> {
-//    use std::io::Read;
-//
-//    let mut file = std::fs::File::open(game).map_err(|_| SlpError::FileDoesNotExist)?;
-//    let mut buf = Vec::new();
-//    file.read_to_end(&mut buf)?;
-//
-//    parse_buf(&buf, port)
-//}
-//
-//pub fn parse_buf(buf: &[u8], port: Port) -> SlpResult<Box<[Action]>> {
-//    let mut stream = file_parser::Stream::new(buf);
-//    let (game, _) = file_parser::parse_file(&mut stream)?;
-//
-//    let frames = match port {
-//        Port::High => &game.high_port_frames,
-//        Port::Low => &game.low_port_frames,
-//    };
-//
-//    Ok(parse(frames).into_boxed_slice())
-//}
-
 //macro_rules! unwrap_or {
 //    ($opt:expr, $else:expr) => {
 //        match $opt {
