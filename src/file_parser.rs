@@ -259,7 +259,7 @@ pub fn parse_file(slp: &[u8]) -> SlpResult<(Game, Notes)> {
 
 // EVENTS ------------------------------------------------------------------------
 
-fn parse_game_start(game_start: &[u8]) -> SlpResult<GameStart> {
+pub fn parse_game_start(game_start: &[u8]) -> SlpResult<GameStart> {
     if game_start.len() < 5 { return Err(SlpError::InvalidFile(InvalidLocation::GameStart)); }
     if game_start[0] != GAME_START { return Err(SlpError::InvalidFile(InvalidLocation::GameStart)); }
 
