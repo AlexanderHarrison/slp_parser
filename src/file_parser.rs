@@ -508,7 +508,7 @@ fn parse_post_frame_update(post_frame_update: &[u8]) -> SlpResult<PostFrameUpdat
         },
         ground_x_velocity       : read_f32(post_frame_update, 0x45),
         hitlag_frames           : read_f32(post_frame_update, 0x49),
-        last_hit_by_instance_id : read_u16(post_frame_update, 0x53),
+        last_hit_by_instance_id : read_u16(post_frame_update, 0x51),
     })
 }
 
