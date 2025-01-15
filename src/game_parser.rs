@@ -464,8 +464,8 @@ impl Action {
 
         match post_airdodge_state.broad_state() {
             BroadState::Standard(StandardBroadState::SpecialLanding) => {
-                let frame = consumer.next_frame().unwrap();
-                let x_vel = match consumer.peek() {
+                let frame = consumer.next_frame().unwrap().to_owned();
+                let x_vel = match consumer.peek_frame() {
                     Some(f) => f.position.x - frame.position.x,
                     None => 0.0,
                 };
@@ -538,13 +538,13 @@ impl Action {
         // TODO: !!!!
         static JUMP_VELOCITIES: [f32; 26] = [0.0; 26];
 
-        let mut last_squat_f = consumer.next_frame().ok_or(ParseError::EOF)?;
+        let mut last_squat_f = consumer.next_frame().ok_or(ParseError::EOF)?.to_owned();
         while consumer.peek().ok_or(ParseError::EOF)?.broad_state() == BroadState::Standard(StandardBroadState::JumpSquat) {
-            last_squat_f = consumer.next_frame().unwrap();
+            last_squat_f = consumer.next_frame().unwrap().to_owned();
         }
 
-        let y_vel = match consumer.peek() {
-            Some(f) => f.position.x - frame.position.x,
+        let y_vel = match consumer.peek_frame() {
+            Some(f) => f.position.y - last_squat_f.position.y,
             None => 0.0,
         };
 
@@ -633,12 +633,12 @@ impl<'a> ActionBuilder<'a> {
         self.next_frame().map(|f| f.state)
     }
 
-    pub fn next_frame<'b>(&'b mut self) -> Option<Frame> {
+    pub fn next_frame<'b>(&'b mut self) -> Option<&'b Frame> {
         match self.frames {
             [f, rs @ ..] => {
                 self.frames = rs;
                 self.cur_frame += 1;
-                Some(*f)
+                Some(f)
             }
             [] => None,
         }
