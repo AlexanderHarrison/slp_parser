@@ -18,9 +18,6 @@ pub const MAX_SUPPORTED_SLPZ_VERSION: u32 = 0;
 pub const MIN_VERSION_MAJOR: u8 = 3;
 pub const MIN_VERSION_MINOR: u8 = 16;
 
-pub const PARSED_VERSION_MAJOR: u8 = 3;
-pub const PARSED_VERSION_MINOR: u8 = 16;
-
 pub const HEADER_LEN: u64 = 15;
 
 fn read_f32(bytes: &[u8], offset: usize) -> f32 { f32::from_be_bytes(bytes[offset..][..4].try_into().unwrap()) }
@@ -351,7 +348,7 @@ struct PreFrameUpdate {
 }
 
 impl Vector {
-    const NULL: Vector = Vector { x: 0.0, y: 0.0 };
+    pub const NULL: Vector = Vector { x: 0.0, y: 0.0 };
 }
 
 impl PreFrameUpdate {
