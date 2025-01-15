@@ -363,7 +363,7 @@ impl PreFrameUpdate {
 }
 
 impl Frame {
-    const NULL: Frame = Frame {
+    pub const NULL: Frame = Frame {
         character               : Character::Mario,
         port_idx                : 0,
         is_follower             : false,
