@@ -465,7 +465,11 @@ impl Action {
         match post_airdodge_state.broad_state() {
             BroadState::Standard(StandardBroadState::SpecialLanding) => {
                 let frame = consumer.next_frame().unwrap();
-                let high_level_action = match frame.velocity.x {
+                let x_vel = match consumer.peek() {
+                    Some(f) => f.position.x - frame.position.x,
+                    None => 0.0,
+                };
+                let high_level_action = match x_vel {
                     x if x < -EPSILON => HighLevelAction::WavelandLeft,
                     x if x > EPSILON => HighLevelAction::WavelandRight,
                     _ => HighLevelAction::WavelandDown,
@@ -539,8 +543,12 @@ impl Action {
             last_squat_f = consumer.next_frame().unwrap();
         }
 
+        let y_vel = match consumer.peek() {
+            Some(f) => f.position.x - frame.position.x,
+            None => 0.0,
+        };
+
         let character = last_squat_f.character;
-        let y_vel = last_squat_f.velocity.y;
 
         let vel_cutoff = JUMP_VELOCITIES.get(character as usize)
             .expect("unknown character");
@@ -557,7 +565,6 @@ struct ActionInitData {
     pub action_start: usize,
     pub start_state: BroadState,
     pub position: Vector,
-    pub velocity: Vector,
 }
 
 pub struct ActionBuilder<'a> {
@@ -582,7 +589,6 @@ impl<'a> ActionBuilder<'a> {
     pub fn start_action(&mut self) -> Result<(), ParseError> {
         let start_frame = self.peek_frame().ok_or(ParseError::EOF)?;
         let position = start_frame.position;
-        let velocity = start_frame.velocity;
 
         let start_state = start_frame.state.broad_state();
 
@@ -590,7 +596,6 @@ impl<'a> ActionBuilder<'a> {
             action_start: self.cur_frame,
             start_state,
             position,
-            velocity,
         });
 
         Ok(())
@@ -605,7 +610,6 @@ impl<'a> ActionBuilder<'a> {
             frame_end: self.cur_frame,
             start_state: start_data.start_state,
             initial_position: start_data.position,
-            initial_velocity: start_data.velocity,
         }
     }
 

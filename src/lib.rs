@@ -60,20 +60,26 @@ pub struct Action {
     pub initial_velocity: Vector,
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct Frame {
+#[derive(Clone, Debug)]
+pub struct FrameCommon {
     pub character: Character,
     pub port_idx: u8,
     pub is_follower: bool,
     pub direction: Direction,
+    pub position: Vector,
+    pub state: ActionState,
+    pub anim_frame: f32,
+    pub shield_size: f32,
+    pub percent: f32,
+}
+
+#[derive(Clone, Debug)]
+pub struct FrameExt {
     pub velocity: Vector,
     pub hit_velocity: Vector,
     pub ground_x_velocity: f32,
-    pub position: Vector,
-    pub state: ActionState,
     pub state_num: u16,
     pub anim_frame: f32,
-    pub shield_size: f32,
 
     // controls
     pub buttons_mask: ButtonsMask,
@@ -82,7 +88,6 @@ pub struct Frame {
     pub right_stick_coords: Vector,
 
     pub hitstun_misc: f32, // char state var 1
-    pub percent: f32,
     pub stock_count: u8,
     pub jumps_remaining: u8,
     pub is_airborne: bool,
@@ -162,7 +167,9 @@ pub struct GameStart {
 pub struct Game {
     pub frame_count: usize,
     pub frames: [Option<Box<[Frame]>>; 4],
+    pub frames_ext: [Option<Box<[FrameExt]>>; 4],
     pub follower_frames: [Option<Box<[Frame]>>; 4],
+    pub follower_frames_ext: [Option<Box<[FrameExt]>>; 4],
 
     /// get item_range with `item_idx[frame]..item_idx[frame+1]`
     pub item_idx: Box<[u16]>,
