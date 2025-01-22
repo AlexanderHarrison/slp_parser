@@ -220,6 +220,15 @@ pub struct Interaction {
     pub player_response: Action,
 }
 
+impl InteractionRef<'_> {
+    pub fn to_owned(self) -> Interaction {
+        Interaction {
+            opponent_initiation: self.opponent_initiation.clone(),
+            player_response: self.player_response.clone(),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct SlpFileInfo {
     pub name: Box<std::ffi::OsStr>,
