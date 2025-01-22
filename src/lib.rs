@@ -474,49 +474,48 @@ pub fn write_notes_to_game(path: &Path, notes: &Notes) -> SlpResult<()> {
     Ok(())
 }
 
-//macro_rules! unwrap_or {
-//    ($opt:expr, $else:expr) => {
-//        match $opt {
-//            Some(data) => data,
-//            None => $else,
-//        }
-//    }
-//}
-//
-//
-//pub fn generate_interactions<'a>(mut player_actions: &'a [Action], mut opponent_actions: &'a [Action]) -> Box<[InteractionRef<'a>]> {
-//    let mut interactions = Vec::new();
-//
-//    let mut initiation;
-//    let mut response;
-//    (initiation, opponent_actions) = unwrap_or!(opponent_actions.split_first(), return interactions.into_boxed_slice());
-//    (response, player_actions) = unwrap_or!(player_actions.split_first(), return interactions.into_boxed_slice());
-//
-//    'outer: loop {
-//        while response.frame_start <= initiation.frame_start {
-//            (response, player_actions) = unwrap_or!(player_actions.split_first(), break 'outer);
-//        }
-//
-//        interactions.push(InteractionRef { 
-//            player_response: response,
-//            opponent_initiation: initiation,
-//        });
-//
-//        while initiation.frame_start <= response.frame_start {
-//            (initiation, opponent_actions) = unwrap_or!(opponent_actions.split_first(), break 'outer);
-//        }
-//    }
-//
-//    interactions.into_boxed_slice()
-//}
-//
+macro_rules! unwrap_or {
+    ($opt:expr, $else:expr) => {
+        match $opt {
+            Some(data) => data,
+            None => $else,
+        }
+    }
+}
+
+pub fn generate_interactions<'a>(mut player_actions: &'a [Action], mut opponent_actions: &'a [Action]) -> Vec<InteractionRef<'a>> {
+    let mut interactions = Vec::new();
+
+    let mut initiation;
+    let mut response;
+    (initiation, opponent_actions) = unwrap_or!(opponent_actions.split_first(), return interactions);
+    (response, player_actions) = unwrap_or!(player_actions.split_first(), return interactions);
+
+    'outer: loop {
+        while response.frame_start <= initiation.frame_start {
+            (response, player_actions) = unwrap_or!(player_actions.split_first(), break 'outer);
+        }
+
+        interactions.push(InteractionRef { 
+            player_response: response,
+            opponent_initiation: initiation,
+        });
+
+        while initiation.frame_start <= response.frame_start {
+            (initiation, opponent_actions) = unwrap_or!(opponent_actions.split_first(), break 'outer);
+        }
+    }
+
+    interactions
+}
+
 use std::fmt;
-//impl fmt::Display for Action {
-//    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//        write!(f, "{:10}: {:15} {} -> {}", self.start_state, self.action_taken, self.frame_start, self.frame_end)
-//    }
-//}
-//
+impl fmt::Display for Action {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:10}: {:15} {} -> {}", self.start_state, self.action_taken, self.frame_start, self.frame_end)
+    }
+}
+
 impl fmt::Display for SlpError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", match self {
