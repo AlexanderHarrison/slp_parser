@@ -208,7 +208,7 @@ impl Game {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct InteractionRef<'a> {
     pub opponent_initiation: &'a Action,
     pub player_response: &'a Action,
