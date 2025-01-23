@@ -98,6 +98,22 @@ impl BroadState {
             BroadState::Special(_) => panic!("Assert in BroadState: 'assert_standard' failed"),
         }
     }
+
+    pub fn as_u16(self) -> u16 {
+        match self {
+            BroadState::Standard(g) => g.as_u16(),
+            BroadState::Special(s) => s.as_u16() + StandardBroadState::MAX_VALUE,
+        }
+    }
+
+    pub fn from_u16(c: Character, n: u16) -> Option<Self> {
+        if n < StandardBroadState::MAX_VALUE {
+            Some(BroadState::Standard(StandardBroadState::from_u16(n)?))
+        } else {
+            let n = n - StandardBroadState::MAX_VALUE;
+            Some(BroadState::Special(SpecialBroadState::from_u16(c, n)?))
+        }
+    }
 }
 
 impl ActionState {
@@ -241,6 +257,8 @@ impl Into<HighLevelAction> for SpecialHighLevelAction {
 }
 
 impl StandardBroadState {
+    pub const MAX_VALUE: u16 = 256;
+
     pub fn is_actionable(self) -> bool {
         use StandardBroadState as SBS;
 
@@ -248,6 +266,55 @@ impl StandardBroadState {
             SBS::Air | SBS::Ground | SBS::Walk | SBS::DashRun | SBS::Shield | SBS::Ledge | SBS::AirJump | SBS::Crouch => true,
             _ => false,
         }
+    }
+
+    pub fn as_u16(self) -> u16 {
+        match self {
+            StandardBroadState::Dead                => 0,
+            StandardBroadState::Attack              => 1,
+            StandardBroadState::Air                 => 2,
+            StandardBroadState::Airdodge            => 3,
+            StandardBroadState::SpecialLanding      => 4,
+            StandardBroadState::Ground              => 5,
+            StandardBroadState::Walk                => 6,
+            StandardBroadState::DashRun             => 7,
+            StandardBroadState::Shield              => 8,
+            StandardBroadState::Ledge               => 9,
+            StandardBroadState::LedgeAction         => 10,
+            StandardBroadState::Hitstun             => 11,
+            StandardBroadState::GenericInactionable => 12,
+            StandardBroadState::JumpSquat           => 13,
+            StandardBroadState::AirJump             => 14,
+            StandardBroadState::Crouch              => 15,
+            StandardBroadState::Grab                => 16,
+            StandardBroadState::Roll                => 17,
+            StandardBroadState::Spotdodge           => 18,
+        }
+    }
+
+    pub fn from_u16(n: u16) -> Option<Self> {
+        Some(match n {
+            0  => StandardBroadState::Dead               ,
+            1  => StandardBroadState::Attack             ,
+            2  => StandardBroadState::Air                ,
+            3  => StandardBroadState::Airdodge           ,
+            4  => StandardBroadState::SpecialLanding     ,
+            5  => StandardBroadState::Ground             ,
+            6  => StandardBroadState::Walk               ,
+            7  => StandardBroadState::DashRun            ,
+            8  => StandardBroadState::Shield             ,
+            9  => StandardBroadState::Ledge              ,
+            10 => StandardBroadState::LedgeAction        ,
+            11 => StandardBroadState::Hitstun            ,
+            12 => StandardBroadState::GenericInactionable,
+            13 => StandardBroadState::JumpSquat          ,
+            14 => StandardBroadState::AirJump            ,
+            15 => StandardBroadState::Crouch             ,
+            16 => StandardBroadState::Grab               ,
+            17 => StandardBroadState::Roll               ,
+            18 => StandardBroadState::Spotdodge          ,
+            _ => return None,
+        })
     }
 }
 
@@ -1203,6 +1270,71 @@ pub enum SpecialBroadState {
     Ganondorf      (SpecialBroadStateGanondorf     ),
 }
 
+impl SpecialBroadState {
+    pub fn as_u16(self) -> u16 {
+        match self {
+            SpecialBroadState::CaptainFalcon  (c) => c.as_u16(),
+            SpecialBroadState::DonkeyKong     (c) => c.as_u16(),
+            SpecialBroadState::Fox            (c) => c.as_u16(),
+            SpecialBroadState::MrGameAndWatch (c) => c.as_u16(),
+            SpecialBroadState::Kirby          (c) => c.as_u16(),
+            SpecialBroadState::Bowser         (c) => c.as_u16(),
+            SpecialBroadState::Link           (c) => c.as_u16(),
+            SpecialBroadState::Luigi          (c) => c.as_u16(),
+            SpecialBroadState::Mario          (c) => c.as_u16(),
+            SpecialBroadState::Marth          (c) => c.as_u16(),
+            SpecialBroadState::Mewtwo         (c) => c.as_u16(),
+            SpecialBroadState::Ness           (c) => c.as_u16(),
+            SpecialBroadState::Peach          (c) => c.as_u16(),
+            SpecialBroadState::Pikachu        (c) => c.as_u16(),
+            SpecialBroadState::IceClimbers    (c) => c.as_u16(),
+            SpecialBroadState::Jigglypuff     (c) => c.as_u16(),
+            SpecialBroadState::Samus          (c) => c.as_u16(),
+            SpecialBroadState::Yoshi          (c) => c.as_u16(),
+            SpecialBroadState::Zelda          (c) => c.as_u16(),
+            SpecialBroadState::Sheik          (c) => c.as_u16(),
+            SpecialBroadState::Falco          (c) => c.as_u16(),
+            SpecialBroadState::YoungLink      (c) => c.as_u16(),
+            SpecialBroadState::DrMario        (c) => c.as_u16(),
+            SpecialBroadState::Roy            (c) => c.as_u16(),
+            SpecialBroadState::Pichu          (c) => c.as_u16(),
+            SpecialBroadState::Ganondorf      (c) => c.as_u16(),
+        }
+    }
+
+    pub fn from_u16(c: Character, n: u16) -> Option<SpecialBroadState> {
+        Some(match c {
+            Character::CaptainFalcon  => SpecialBroadState::CaptainFalcon (SpecialBroadStateCaptainFalcon ::from_u16(n)?),
+            Character::DonkeyKong     => SpecialBroadState::DonkeyKong    (SpecialBroadStateDonkeyKong    ::from_u16(n)?),
+            Character::Fox            => SpecialBroadState::Fox           (SpecialBroadStateFox           ::from_u16(n)?),
+            Character::MrGameAndWatch => SpecialBroadState::MrGameAndWatch(SpecialBroadStateMrGameAndWatch::from_u16(n)?),
+            Character::Kirby          => SpecialBroadState::Kirby         (SpecialBroadStateKirby         ::from_u16(n)?),
+            Character::Bowser         => SpecialBroadState::Bowser        (SpecialBroadStateBowser        ::from_u16(n)?),
+            Character::Link           => SpecialBroadState::Link          (SpecialBroadStateLink          ::from_u16(n)?),
+            Character::Luigi          => SpecialBroadState::Luigi         (SpecialBroadStateLuigi         ::from_u16(n)?),
+            Character::Mario          => SpecialBroadState::Mario         (SpecialBroadStateMario         ::from_u16(n)?),
+            Character::Marth          => SpecialBroadState::Marth         (SpecialBroadStateMarth         ::from_u16(n)?),
+            Character::Mewtwo         => SpecialBroadState::Mewtwo        (SpecialBroadStateMewtwo        ::from_u16(n)?),
+            Character::Ness           => SpecialBroadState::Ness          (SpecialBroadStateNess          ::from_u16(n)?),
+            Character::Peach          => SpecialBroadState::Peach         (SpecialBroadStatePeach         ::from_u16(n)?),
+            Character::Pikachu        => SpecialBroadState::Pikachu       (SpecialBroadStatePikachu       ::from_u16(n)?),
+            Character::Popo           => SpecialBroadState::IceClimbers   (SpecialBroadStateIceClimbers   ::from_u16(n)?),
+            Character::Nana           => SpecialBroadState::IceClimbers   (SpecialBroadStateIceClimbers   ::from_u16(n)?),
+            Character::Jigglypuff     => SpecialBroadState::Jigglypuff    (SpecialBroadStateJigglypuff    ::from_u16(n)?),
+            Character::Samus          => SpecialBroadState::Samus         (SpecialBroadStateSamus         ::from_u16(n)?),
+            Character::Yoshi          => SpecialBroadState::Yoshi         (SpecialBroadStateYoshi         ::from_u16(n)?),
+            Character::Zelda          => SpecialBroadState::Zelda         (SpecialBroadStateZelda         ::from_u16(n)?),
+            Character::Sheik          => SpecialBroadState::Sheik         (SpecialBroadStateSheik         ::from_u16(n)?),
+            Character::Falco          => SpecialBroadState::Falco         (SpecialBroadStateFalco         ::from_u16(n)?),
+            Character::YoungLink      => SpecialBroadState::YoungLink     (SpecialBroadStateYoungLink     ::from_u16(n)?),
+            Character::DrMario        => SpecialBroadState::DrMario       (SpecialBroadStateDrMario       ::from_u16(n)?),
+            Character::Roy            => SpecialBroadState::Roy           (SpecialBroadStateRoy           ::from_u16(n)?),
+            Character::Pichu          => SpecialBroadState::Pichu         (SpecialBroadStatePichu         ::from_u16(n)?),
+            Character::Ganondorf      => SpecialBroadState::Ganondorf     (SpecialBroadStateGanondorf     ::from_u16(n)?),
+        })
+    }
+}
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum SpecialHighLevelAction {
     CaptainFalcon  (HighLevelActionCaptainFalcon ),
@@ -1580,10 +1712,9 @@ pub enum StandardActionState {
 }
 
 impl HighLevelAction {
-    pub const MAX_VALUE: u8 = 63;
-    pub const VARIANT_COUNT: u8 = 64;
+    pub const MAX_VALUE: u16 = 256;
 
-    pub fn from_u8(n: u8) -> Option<Self> {
+    pub fn from_u16(c: Character, n: u16) -> Option<Self> {
         use HighLevelAction as HLA;
         Some(match n {
             00 => HLA::GroundAttack(GroundAttack::Utilt),
@@ -1656,8 +1787,8 @@ impl HighLevelAction {
             60 => HLA::RollForward,
             61 => HLA::RollBackward,
             62 => HLA::Crouch,
-            Self::MAX_VALUE => HLA::Hitstun,
-            Self::VARIANT_COUNT.. => return None,
+            ..Self::MAX_VALUE => return None,
+            _ => HLA::Special(SpecialHighLevelAction::from_u16(c, n - Self::MAX_VALUE)?),
         })
     }
 
@@ -1738,20 +1869,73 @@ impl HighLevelAction {
             HLA::Walljump => 64,
             HLA::Dead => 65,
 
-            HLA::Special(s) => 66 + s.as_u16(), // TODO not backwards compatible
+            HLA::Special(s) => Self::MAX_VALUE + s.as_u16(), // TODO not backwards compatible
         }
     }
 }
 
 impl SpecialHighLevelAction {
     pub fn as_u16(self) -> u16 {
-        todo!();
-        // use shla::VARIANT_NAME to get this
-        
-        //match self {
-        //    SpecialHighLevelAction::Fox(f) => f as u16,
-        //    SpecialHighLevelAction::Falco(f) => f as u16,
-        //}
+        match self {
+            SpecialHighLevelAction::CaptainFalcon  (s) => s.as_u16(),
+            SpecialHighLevelAction::DonkeyKong     (s) => s.as_u16(),
+            SpecialHighLevelAction::Fox            (s) => s.as_u16(),
+            SpecialHighLevelAction::MrGameAndWatch (s) => s.as_u16(),
+            SpecialHighLevelAction::Kirby          (s) => s.as_u16(),
+            SpecialHighLevelAction::Bowser         (s) => s.as_u16(),
+            SpecialHighLevelAction::Link           (s) => s.as_u16(),
+            SpecialHighLevelAction::Luigi          (s) => s.as_u16(),
+            SpecialHighLevelAction::Mario          (s) => s.as_u16(),
+            SpecialHighLevelAction::Marth          (s) => s.as_u16(),
+            SpecialHighLevelAction::Mewtwo         (s) => s.as_u16(),
+            SpecialHighLevelAction::Ness           (s) => s.as_u16(),
+            SpecialHighLevelAction::Peach          (s) => s.as_u16(),
+            SpecialHighLevelAction::Pikachu        (s) => s.as_u16(),
+            SpecialHighLevelAction::IceClimbers    (s) => s.as_u16(),
+            SpecialHighLevelAction::Jigglypuff     (s) => s.as_u16(),
+            SpecialHighLevelAction::Samus          (s) => s.as_u16(),
+            SpecialHighLevelAction::Yoshi          (s) => s.as_u16(),
+            SpecialHighLevelAction::Zelda          (s) => s.as_u16(),
+            SpecialHighLevelAction::Sheik          (s) => s.as_u16(),
+            SpecialHighLevelAction::Falco          (s) => s.as_u16(),
+            SpecialHighLevelAction::YoungLink      (s) => s.as_u16(),
+            SpecialHighLevelAction::DrMario        (s) => s.as_u16(),
+            SpecialHighLevelAction::Roy            (s) => s.as_u16(),
+            SpecialHighLevelAction::Pichu          (s) => s.as_u16(),
+            SpecialHighLevelAction::Ganondorf      (s) => s.as_u16(),
+        }
+    }
+
+    pub fn from_u16(c: Character, n: u16) -> Option<SpecialHighLevelAction> {
+        Some(match c {
+            Character::CaptainFalcon  => SpecialHighLevelAction::CaptainFalcon (HighLevelActionCaptainFalcon ::from_u16(n)?),
+            Character::DonkeyKong     => SpecialHighLevelAction::DonkeyKong    (HighLevelActionDonkeyKong    ::from_u16(n)?),
+            Character::Fox            => SpecialHighLevelAction::Fox           (HighLevelActionFox           ::from_u16(n)?),
+            Character::MrGameAndWatch => SpecialHighLevelAction::MrGameAndWatch(HighLevelActionMrGameAndWatch::from_u16(n)?),
+            Character::Kirby          => SpecialHighLevelAction::Kirby         (HighLevelActionKirby         ::from_u16(n)?),
+            Character::Bowser         => SpecialHighLevelAction::Bowser        (HighLevelActionBowser        ::from_u16(n)?),
+            Character::Link           => SpecialHighLevelAction::Link          (HighLevelActionLink          ::from_u16(n)?),
+            Character::Luigi          => SpecialHighLevelAction::Luigi         (HighLevelActionLuigi         ::from_u16(n)?),
+            Character::Mario          => SpecialHighLevelAction::Mario         (HighLevelActionMario         ::from_u16(n)?),
+            Character::Marth          => SpecialHighLevelAction::Marth         (HighLevelActionMarth         ::from_u16(n)?),
+            Character::Mewtwo         => SpecialHighLevelAction::Mewtwo        (HighLevelActionMewtwo        ::from_u16(n)?),
+            Character::Ness           => SpecialHighLevelAction::Ness          (HighLevelActionNess          ::from_u16(n)?),
+            Character::Peach          => SpecialHighLevelAction::Peach         (HighLevelActionPeach         ::from_u16(n)?),
+            Character::Pikachu        => SpecialHighLevelAction::Pikachu       (HighLevelActionPikachu       ::from_u16(n)?),
+            Character::Popo           => SpecialHighLevelAction::IceClimbers   (HighLevelActionIceClimbers   ::from_u16(n)?),
+            Character::Nana           => SpecialHighLevelAction::IceClimbers   (HighLevelActionIceClimbers   ::from_u16(n)?),
+            Character::Jigglypuff     => SpecialHighLevelAction::Jigglypuff    (HighLevelActionJigglypuff    ::from_u16(n)?),
+            Character::Samus          => SpecialHighLevelAction::Samus         (HighLevelActionSamus         ::from_u16(n)?),
+            Character::Yoshi          => SpecialHighLevelAction::Yoshi         (HighLevelActionYoshi         ::from_u16(n)?),
+            Character::Zelda          => SpecialHighLevelAction::Zelda         (HighLevelActionZelda         ::from_u16(n)?),
+            Character::Sheik          => SpecialHighLevelAction::Sheik         (HighLevelActionSheik         ::from_u16(n)?),
+            Character::Falco          => SpecialHighLevelAction::Falco         (HighLevelActionFalco         ::from_u16(n)?),
+            Character::YoungLink      => SpecialHighLevelAction::YoungLink     (HighLevelActionYoungLink     ::from_u16(n)?),
+            Character::DrMario        => SpecialHighLevelAction::DrMario       (HighLevelActionDrMario       ::from_u16(n)?),
+            Character::Roy            => SpecialHighLevelAction::Roy           (HighLevelActionRoy           ::from_u16(n)?),
+            Character::Pichu          => SpecialHighLevelAction::Pichu         (HighLevelActionPichu         ::from_u16(n)?),
+            Character::Ganondorf      => SpecialHighLevelAction::Ganondorf     (HighLevelActionGanondorf     ::from_u16(n)?),
+        })
     }
 }
 

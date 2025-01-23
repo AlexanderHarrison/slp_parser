@@ -92,6 +92,20 @@ macro_rules! special_states {
                 }
             }
 
+            pub fn as_u16(self) -> u16 {
+                self as u16
+            }
+
+            pub fn from_u16(n: u16) -> Option<Self> {
+                static VARIANTS: &[$sbs] = &[ $($sbs::$bsnm),* ];
+                let n = n as usize;
+                if n < VARIANTS.len() {
+                    Some(VARIANTS[n])
+                } else {
+                    None
+                }
+            }
+
             pub fn parse_jumping_special(self, consumer: &mut ActionBuilder, _jump_type: JumpType) -> Result<Action, ParseError> {
                 use $sbs::*;
 
@@ -116,6 +130,24 @@ macro_rules! special_states {
         impl $shla {
             #[allow(unused, non_snake_case)]
             pub const VARIANT_COUNT: usize = $( {let $bsnm: u8; 1} + )* $( $( {let $jparam: u8; 1} + )* )* 0;
+
+            pub fn as_u16(self) -> u16 {
+                self as u16
+            }
+
+            pub fn from_u16(n: u16) -> Option<Self> {
+                static VARIANTS: &[$shla] = &[
+                    $($shla::$bsnm,)*
+                    $( $($shla::$jparam,)* )*
+                ];
+
+                let n = n as usize;
+                if n < VARIANTS.len() {
+                    Some(VARIANTS[n])
+                } else {
+                    None
+                }
+            }
 
             pub fn as_string(&self) -> &'static str {
                 use $shla::*;
