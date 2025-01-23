@@ -221,7 +221,7 @@ pub struct Interaction {
 }
 
 impl InteractionRef<'_> {
-    pub fn to_owned(self) -> Interaction {
+    pub fn own(self) -> Interaction {
         Interaction {
             opponent_initiation: self.opponent_initiation.clone(),
             player_response: self.player_response.clone(),
