@@ -56,7 +56,6 @@ pub struct Action {
     pub action_taken: HighLevelAction,
     pub frame_start: usize,
     pub frame_end: usize,
-    pub initial_position: Vector,
 }
 
 #[derive(Clone, Debug)]
@@ -212,12 +211,14 @@ impl Game {
 pub struct InteractionRef<'a> {
     pub opponent_initiation: &'a Action,
     pub player_response: &'a Action,
+    pub score: Option<(Score, Score)>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Interaction {
     pub opponent_initiation: Action,
     pub player_response: Action,
+    pub score: Option<(Score, Score)>,
 }
 
 impl InteractionRef<'_> {
@@ -225,6 +226,7 @@ impl InteractionRef<'_> {
         Interaction {
             opponent_initiation: self.opponent_initiation.clone(),
             player_response: self.player_response.clone(),
+            score: self.score,
         }
     }
 }
@@ -492,7 +494,195 @@ macro_rules! unwrap_or {
     }
 }
 
-pub fn generate_interactions<'a>(mut player_actions: &'a [Action], mut opponent_actions: &'a [Action]) -> Vec<InteractionRef<'a>> {
+// x distance from centre to edge
+fn stage_width(stage: Stage) -> Option<f32> {
+    Some(match stage {
+        Stage::YoshisStory => 56.0,
+        Stage::FountainOfDreams => 63.348,
+        Stage::Battlefield => 68.4,
+        Stage::DreamLandN64 => 77.259,
+        Stage::FinalDestination => 85.554,
+        Stage::PokemonStadium => 87.738,
+        _ => return None,
+    })
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct Score {
+    pub percent: f32,
+    pub kill: f32,
+    pub pos_y: f32,
+    pub pos_x: f32,
+}
+
+pub fn score_1p(
+    stage: Stage,
+    starting_action: &Action,
+    ending_action: &Action,
+    frames: &[Frame],
+) -> Option<Score> {
+    const KILL_SCORE: f32 = -10.0;
+    const PERCENT_MAX: f32 = 200.0;
+    const PERCENT_FACTOR: f32 = -0.1;
+    const POS_X_FACTOR: f32 = -0.005;
+    const POS_Y_FACTOR_ONSTAGE: f32 = -0.002;
+    const POS_Y_FACTOR_OFFSTAGE: f32 = -0.002;
+
+    let starting_frame = &frames[starting_action.frame_start];
+    let ending_frame = &frames[ending_action.frame_start];
+    let mut score = Score { percent: 0.0, kill: 0.0, pos_y: 0.0, pos_x: 0.0 };
+
+    {   // percent score ---------------------
+        // 0 -> 50 = -4.375
+        // 0 -> 100 = -7.5
+        //
+        // Integral of 1 - percent / 200 from starting percent -> ending percent
+
+        let starting_percent = starting_frame.percent;
+        let ending_percent = ending_frame.percent;
+
+        fn percent_score(mut x: f32) -> f32 {
+            if x > PERCENT_MAX { x = PERCENT_MAX; }
+            (x - x*x / (PERCENT_MAX * 2.0)) * PERCENT_FACTOR
+        }
+
+        score.percent = percent_score(ending_percent) - percent_score(starting_percent);
+    }
+
+    if ending_action.action_taken == HighLevelAction::Dead {
+        score.kill = KILL_SCORE
+    } else {
+        {   // x positioning score ---------------------
+
+            let start_x = starting_frame.position.x.abs();
+            let end_x = ending_frame.position.x.abs();
+
+            // Integral of x_pos from starting x -> ending x
+            fn x_pos_score(x: f32) -> f32 {
+                x*x / 2.0 * POS_X_FACTOR
+            }
+
+            score.pos_x = x_pos_score(end_x) - x_pos_score(start_x);
+        }
+
+        {   // y positioning score ---------------------
+            //
+            //           |          |
+            // y is good | y is bad |  y is good
+            //           |__________|
+
+            let start_x = starting_frame.position.x.abs();
+            let start_y = starting_frame.position.y;
+            let end_x = ending_frame.position.x.abs();
+            let end_y = ending_frame.position.y;
+
+            fn y_pos_score(stage_width: f32, x: f32, y: f32) -> f32 {
+                let x = x.abs();
+                if x < stage_width {
+                    x * y.abs() * POS_Y_FACTOR_ONSTAGE
+                } else {
+                    let stage_rect = stage_width * y * POS_Y_FACTOR_ONSTAGE;
+                    let offstage_tri = (x - stage_width).powi(2) / 2.0 * POS_Y_FACTOR_OFFSTAGE;
+                    stage_rect + offstage_tri
+                }
+            }
+
+            let stage_width = stage_width(stage)?;
+            score.pos_y = y_pos_score(stage_width, end_x, end_y) - y_pos_score(stage_width, start_x, start_y);
+        }
+    }
+
+    Some(score)
+}
+
+pub fn compute_score(
+    stage: Stage,
+    player_actions: &[Action],
+    opponent_actions: &[Action],
+    player_frames: &[Frame],
+    opponent_frames: &[Frame],
+) -> Option<(Score, Score)> {
+    if player_actions.is_empty() { return None; }
+    if opponent_actions.is_empty() { return None; }
+
+    let mut ending_pl_i = 0;
+    let mut ending_op_i = 0;
+
+    loop {
+        match player_actions.get(ending_pl_i) {
+            None => {
+                ending_pl_i -= 1;
+                break;
+            }
+            Some(a) if a.action_taken == HighLevelAction::Hitstun => break,
+            _ => ending_pl_i += 1,
+        }
+    }
+
+    loop {
+        match opponent_actions.get(ending_op_i) {
+            None => {
+                ending_op_i -= 1;
+                break;
+            }
+            Some(a) if a.action_taken == HighLevelAction::Hitstun => break,
+            _ => ending_op_i += 1,
+        }
+    }
+
+    let ending_f = {
+        let ending_f_pl = player_actions[ending_pl_i].frame_end;
+        let ending_f_op = opponent_actions[ending_op_i].frame_end;
+        ending_f_pl.max(ending_f_op)
+    };
+
+    loop {
+        if ending_pl_i >= player_actions.len() {
+            ending_pl_i = player_actions.len() - 1;
+            break;
+        } else if player_actions[ending_pl_i].frame_end < ending_f {
+            break;
+        }
+
+        ending_pl_i += 1;
+    }
+
+    loop {
+        if ending_op_i >= opponent_actions.len() {
+            ending_op_i = opponent_actions.len() - 1;
+            break;
+        } else if opponent_actions[ending_op_i].frame_end < ending_f {
+            break;
+        }
+
+        ending_op_i += 1;
+    }
+
+    let score_pl = score_1p(
+        stage,
+        &player_actions[0],
+        &player_actions[ending_pl_i],
+        player_frames,
+    )?;
+
+    let score_op = score_1p(
+        stage,
+        &opponent_actions[0],
+        &opponent_actions[ending_op_i],
+        opponent_frames,
+    )?;
+
+    Some((score_pl, score_op))
+}
+
+pub fn generate_interactions<'a>(
+    stage: Stage,
+    mut player_actions: &'a [Action],
+    mut opponent_actions: &'a [Action],
+
+    player_frames: &[Frame],
+    opponent_frames: &[Frame],
+) -> Vec<InteractionRef<'a>> {
     let mut interactions = Vec::new();
 
     let mut initiation;
@@ -505,9 +695,12 @@ pub fn generate_interactions<'a>(mut player_actions: &'a [Action], mut opponent_
             (response, player_actions) = unwrap_or!(player_actions.split_first(), break 'outer);
         }
 
+        let score = compute_score(stage, player_actions, opponent_actions, player_frames, opponent_frames);
+
         interactions.push(InteractionRef { 
             player_response: response,
             opponent_initiation: initiation,
+            score,
         });
 
         while initiation.frame_start <= response.frame_start {

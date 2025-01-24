@@ -564,7 +564,6 @@ impl Action {
 struct ActionInitData {
     pub action_start: usize,
     pub start_state: BroadState,
-    pub position: Vector,
 }
 
 pub struct ActionBuilder<'a> {
@@ -588,14 +587,11 @@ impl<'a> ActionBuilder<'a> {
 
     pub fn start_action(&mut self) -> Result<(), ParseError> {
         let start_frame = self.peek_frame().ok_or(ParseError::EOF)?;
-        let position = start_frame.position;
-
         let start_state = start_frame.state.broad_state();
 
         self.action_init_data = Some(ActionInitData {
             action_start: self.cur_frame,
             start_state,
-            position,
         });
 
         Ok(())
@@ -609,7 +605,6 @@ impl<'a> ActionBuilder<'a> {
             frame_start: start_data.action_start,
             frame_end: self.cur_frame,
             start_state: start_data.start_state,
-            initial_position: start_data.position,
         }
     }
 
