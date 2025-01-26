@@ -546,6 +546,8 @@ pub fn score_1p(
             (x - x*x / (PERCENT_MAX * 2.0)) * PERCENT_FACTOR
         }
 
+        dbg!(ending_percent, starting_percent, percent_score(ending_percent), percent_score(starting_percent));
+
         score.percent = percent_score(ending_percent) - percent_score(starting_percent);
     }
 
