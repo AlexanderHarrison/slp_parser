@@ -485,14 +485,14 @@ pub fn write_notes_to_game(path: &Path, notes: &Notes) -> SlpResult<()> {
     Ok(())
 }
 
-macro_rules! unwrap_or {
-    ($opt:expr, $else:expr) => {
-        match $opt {
-            Some(data) => data,
-            None => $else,
-        }
-    }
-}
+//macro_rules! unwrap_or {
+//    ($opt:expr, $else:expr) => {
+//        match $opt {
+//            Some(data) => data,
+//            None => $else,
+//        }
+//    }
+//}
 
 // x distance from centre to edge
 fn stage_width(stage: Stage) -> Option<f32> {
@@ -679,38 +679,74 @@ pub fn compute_score(
     Some((score_pl, score_op))
 }
 
+pub const REACTION_TIME: usize = 15;
+
 pub fn generate_interactions<'a>(
     stage: Stage,
-    mut player_actions: &'a [Action],
-    mut opponent_actions: &'a [Action],
+    player_actions: &'a [Action],
+    opponent_actions: &'a [Action],
 
     player_frames: &[Frame],
     opponent_frames: &[Frame],
 ) -> Vec<InteractionRef<'a>> {
     let mut interactions = Vec::new();
 
-    let mut initiation;
-    let mut response;
-    (initiation, opponent_actions) = unwrap_or!(opponent_actions.split_first(), return interactions);
-    (response, player_actions) = unwrap_or!(player_actions.split_first(), return interactions);
+    let mut pl_i = 0;
+    let mut op_i = 0;
 
-    'outer: loop {
-        while response.frame_start <= initiation.frame_start {
-            (response, player_actions) = unwrap_or!(player_actions.split_first(), break 'outer);
+    while pl_i < player_actions.len() {
+        let response = &player_actions[pl_i];
+
+        loop {
+            if op_i == opponent_actions.len() { break; }
+            let initiation = &opponent_actions[op_i];
+            if initiation.frame_start + REACTION_TIME > response.frame_start { break; }
+            op_i += 1;
+        };
+
+        let found = op_i != 0
+            && op_i != opponent_actions.len()
+            && opponent_actions[op_i - 1].frame_start + REACTION_TIME <= response.frame_start;
+
+        if found {
+            op_i -= 1;
+            
+            let score = compute_score(stage, &player_actions[pl_i..], &opponent_actions[op_i..], player_frames, opponent_frames);
+
+            let initiation = &opponent_actions[op_i];
+
+            interactions.push(InteractionRef { 
+                player_response: response,
+                opponent_initiation: initiation,
+                score,
+            });
         }
 
-        let score = compute_score(stage, player_actions, opponent_actions, player_frames, opponent_frames);
-
-        interactions.push(InteractionRef { 
-            player_response: response,
-            opponent_initiation: initiation,
-            score,
-        });
-
-        while initiation.frame_start <= response.frame_start {
-            (initiation, opponent_actions) = unwrap_or!(opponent_actions.split_first(), break 'outer);
-        }
+        pl_i += 1;
     }
+
+    //let mut initiation;
+    //let mut response;
+    //(initiation, opponent_actions) = unwrap_or!(opponent_actions.split_first(), return interactions);
+    //(response, player_actions) = unwrap_or!(player_actions.split_first(), return interactions);
+
+    //'outer: loop {
+    //    while response.frame_start < initiation.frame_start + REACTION_TIME {
+    //        (response, player_actions) = unwrap_or!(player_actions.split_first(), break 'outer);
+    //    }
+
+    //    let score = compute_score(stage, player_actions, opponent_actions, player_frames, opponent_frames);
+
+    //    interactions.push(InteractionRef { 
+    //        player_response: response,
+    //        opponent_initiation: initiation,
+    //        score,
+    //    });
+
+    //    while initiation.frame_start <= response.frame_start {
+    //        (initiation, opponent_actions) = unwrap_or!(opponent_actions.split_first(), break 'outer);
+    //    }
+    //}
 
     interactions
 }
