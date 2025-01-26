@@ -524,8 +524,8 @@ pub fn score_1p(
     const KILL_SCORE: f32 = -10.0;
     const PERCENT_MAX: f32 = 200.0;
     const PERCENT_FACTOR: f32 = -0.1;
-    const POS_X_FACTOR: f32 = -0.005;
-    const POS_Y_FACTOR_ONSTAGE: f32 = -0.002;
+    const POS_X_FACTOR: f32 = -0.002;
+    const POS_Y_FACTOR_ONSTAGE: f32 = -0.001;
     const POS_Y_FACTOR_OFFSTAGE: f32 = -0.002;
 
     let starting_frame = &frames[starting_action.frame_start];
@@ -545,8 +545,6 @@ pub fn score_1p(
             if x > PERCENT_MAX { x = PERCENT_MAX; }
             (x - x*x / (PERCENT_MAX * 2.0)) * PERCENT_FACTOR
         }
-
-        dbg!(ending_percent, starting_percent, percent_score(ending_percent), percent_score(starting_percent));
 
         score.percent = percent_score(ending_percent) - percent_score(starting_percent);
     }
@@ -659,8 +657,6 @@ pub fn compute_score(
 
         ending_op_i += 1;
     }
-
-    dbg!(ending_pl_i, ending_op_i);
 
     let score_pl = score_1p(
         stage,
