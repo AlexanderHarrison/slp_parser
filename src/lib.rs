@@ -529,7 +529,7 @@ pub fn score_1p(
     const POS_Y_FACTOR_OFFSTAGE: f32 = -0.002;
 
     let starting_frame = &frames[starting_action.frame_start];
-    let ending_frame = &frames[ending_action.frame_end];
+    let ending_frame = &frames[ending_action.frame_end-1];
     let mut score = Score { percent: 0.0, kill: 0.0, pos_y: 0.0, pos_x: 0.0 };
 
     {   // percent score ---------------------
