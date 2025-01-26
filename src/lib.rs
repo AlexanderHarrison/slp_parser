@@ -616,8 +616,8 @@ pub fn compute_score(
                 ending_pl_i -= 1;
                 break;
             }
-            Some(a) if a.action_taken == HighLevelAction::Hitstun => break,
-            _ => ending_pl_i += 1,
+            Some(a) if a.action_taken == HighLevelAction::Hitstun => ending_pl_i += 1,
+            _ => break,
         }
     }
 
@@ -627,8 +627,8 @@ pub fn compute_score(
                 ending_op_i -= 1;
                 break;
             }
-            Some(a) if a.action_taken == HighLevelAction::Hitstun => break,
-            _ => ending_op_i += 1,
+            Some(a) if a.action_taken == HighLevelAction::Hitstun => ending_op_i += 1,
+            _ => break,
         }
     }
 
