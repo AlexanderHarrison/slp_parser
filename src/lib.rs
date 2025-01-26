@@ -529,7 +529,7 @@ pub fn score_1p(
     const POS_Y_FACTOR_OFFSTAGE: f32 = -0.002;
 
     let starting_frame = &frames[starting_action.frame_start];
-    let ending_frame = &frames[ending_action.frame_start];
+    let ending_frame = &frames[ending_action.frame_end];
     let mut score = Score { percent: 0.0, kill: 0.0, pos_y: 0.0, pos_x: 0.0 };
 
     {   // percent score ---------------------
@@ -607,8 +607,8 @@ pub fn compute_score(
     if player_actions.is_empty() { return None; }
     if opponent_actions.is_empty() { return None; }
 
-    let mut ending_pl_i = 0;
-    let mut ending_op_i = 0;
+    let mut ending_pl_i = 1;
+    let mut ending_op_i = 1;
 
     loop {
         match player_actions.get(ending_pl_i) {
@@ -642,7 +642,7 @@ pub fn compute_score(
         if ending_pl_i >= player_actions.len() {
             ending_pl_i = player_actions.len() - 1;
             break;
-        } else if player_actions[ending_pl_i].frame_end < ending_f {
+        } else if player_actions[ending_pl_i].frame_end >= ending_f {
             break;
         }
 
@@ -653,12 +653,14 @@ pub fn compute_score(
         if ending_op_i >= opponent_actions.len() {
             ending_op_i = opponent_actions.len() - 1;
             break;
-        } else if opponent_actions[ending_op_i].frame_end < ending_f {
+        } else if opponent_actions[ending_op_i].frame_end >= ending_f {
             break;
         }
 
         ending_op_i += 1;
     }
+
+    dbg!(ending_pl_i, ending_op_i);
 
     let score_pl = score_1p(
         stage,
