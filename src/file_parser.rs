@@ -282,8 +282,11 @@ pub fn parse_game_start(game_start: &[u8]) -> SlpResult<GameStart> {
 
         let character = Character::from_u8_external(read_u8(game_info_block, 0x60 + 0x24*i))
             .ok_or(SlpError::InvalidFile(InvalidLocation::GameStart))?;
-        let character_colour = CharacterColour::from_character_and_colour(character, read_u8(game_info_block, 0x63 + 0x24*i))
-            .ok_or(SlpError::InvalidFile(InvalidLocation::GameStart))?;
+
+        let costume_idx = read_u8(game_info_block, 0x63 + 0x24*i);
+        let character_colour: CharacterColour = CharacterColour::from_character_and_colour(character, costume_idx)
+        // if a player is using a mod that adds more character slots then we default to the neutral costume.
+            .unwrap_or_else(|| CharacterColour::from_character_and_colour(character, 0).unwrap());
 
         starting_character_colours[i] = Some(character_colour);
         names[i] = read_array::<31>(game_start, 0x1A5 + 0x1F*i);
