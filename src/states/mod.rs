@@ -1787,6 +1787,9 @@ impl HighLevelAction {
             60 => HLA::RollForward,
             61 => HLA::RollBackward,
             62 => HLA::Crouch,
+            63 => HLA::Hitstun,
+            64 => HLA::Walljump,
+            65 => HLA::Dead,
             ..Self::MAX_VALUE => return None,
             _ => HLA::Special(SpecialHighLevelAction::from_u16(c, n - Self::MAX_VALUE)?),
         })
