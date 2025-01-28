@@ -528,6 +528,8 @@ pub fn score_1p(
     const POS_Y_FACTOR_ONSTAGE: f32 = -0.001;
     const POS_Y_FACTOR_OFFSTAGE: f32 = -0.002;
 
+    let stage_width = stage_width(stage)?;
+
     let starting_frame = &frames[starting_action.frame_start];
     let ending_frame = &frames[ending_action.frame_end-1];
     let mut score = Score { percent: 0.0, kill: 0.0, pos_y: 0.0, pos_x: 0.0 };
@@ -554,8 +556,13 @@ pub fn score_1p(
     } else {
         {   // x positioning score ---------------------
 
-            let start_x = starting_frame.position.x.abs();
-            let end_x = ending_frame.position.x.abs();
+            let mut start_x = starting_frame.position.x.abs();
+            let mut end_x = ending_frame.position.x.abs();
+
+            start_x -= stage_width / 2.0;
+            end_x -= stage_width / 2.0;
+            if start_x < 0.0 { start_x = 0.0; }
+            if end_x < 0.0 { end_x = 0.0; }
 
             // Integral of x_pos from starting x -> ending x
             fn x_pos_score(x: f32) -> f32 {
@@ -587,7 +594,6 @@ pub fn score_1p(
                 }
             }
 
-            let stage_width = stage_width(stage)?;
             score.pos_y = y_pos_score(stage_width, end_x, end_y) - y_pos_score(stage_width, start_x, start_y);
         }
     }
