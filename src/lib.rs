@@ -570,6 +570,7 @@ pub fn score_1p(
             }
 
             score.pos_x = x_pos_score(end_x) - x_pos_score(start_x);
+            eprintln!("{:.2}->{:.2} : {:.2}->{:.2} : {:.2}", start_x, end_x, x_pos_score(start_x), x_pos_score(end_x), score.pos_x);
         }
 
         {   // y positioning score ---------------------
