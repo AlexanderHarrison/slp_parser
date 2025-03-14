@@ -692,6 +692,19 @@ pub struct Notes {
     pub image_compressed_data: Vec<u8>,
 }
 
+impl Notes {
+    pub const NULL: Notes = Notes {
+        data: String::new(),
+        start_frames: Vec::new(),
+        frame_lengths: Vec::new(),
+        data_idx: Vec::new(),
+        image_data_offsets: Vec::new(),
+        image_start_frames: Vec::new(),
+        image_frame_lengths: Vec::new(),
+        image_compressed_data: Vec::new(),
+    };
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct Metadata {
     pub duration: i32,
