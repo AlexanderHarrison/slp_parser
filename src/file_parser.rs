@@ -17,6 +17,10 @@ pub const MAX_SUPPORTED_SLPZ_VERSION: u32 = 0;
 
 pub const HEADER_LEN: u64 = 15;
 
+// Our parsing method requires the FRAME_BOOKEND event introduced in v3.0.0.
+pub const MIN_VERSION_MAJOR: u8 = 3;
+pub const MIN_VERSION_MINOR: u8 = 0;
+
 fn read_array<const SIZE: usize>(bytes: &[u8], offset: usize) -> [u8; SIZE] {
     if offset + SIZE > bytes.len() { return [0u8; SIZE]; }
     bytes[offset..][..SIZE].try_into().unwrap()
@@ -262,6 +266,12 @@ pub fn parse_game_start(game_start: &[u8]) -> SlpResult<GameStart> {
     let version_major = version[0];
     let version_minor = version[1];
     let version_patch = version[2];
+    
+    if version_major < MIN_VERSION_MAJOR 
+        || (version_major == MIN_VERSION_MAJOR && version_minor < MIN_VERSION_MINOR)
+    {
+        return Err(SlpError::OutdatedFile);
+    } 
 
     let game_info_block = &game_start[5..];
 

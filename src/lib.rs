@@ -36,6 +36,7 @@ impl From<InvalidLocation> for SlpError {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum SlpError {
+    OutdatedFile,
     TooNewFile,
     NotAnSlpFile,
     InvalidFile(InvalidLocation),
@@ -770,6 +771,11 @@ impl fmt::Display for Action {
 impl fmt::Display for SlpError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", match self {
+            SlpError::OutdatedFile => format!(
+                "Outdated slp file. A version >= {}.{}.0 is required.",
+                MIN_VERSION_MAJOR,
+                MIN_VERSION_MINOR,
+            ),
             SlpError::NotAnSlpFile => "file is not a Slippi Replay (.slp) file".to_owned(),
             SlpError::InvalidFile(InvalidLocation::SlpzDecompression) => "Slpz file is invalid and could not be decompressed".to_owned(),
             SlpError::InvalidFile(InvalidLocation::Metadata) => "Slp file is invalid: metadata could not be parsed".to_owned(),
