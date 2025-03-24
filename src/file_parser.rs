@@ -15,20 +15,18 @@ const STADIUM_INFO:         u8 = 0x41;
 
 pub const MAX_SUPPORTED_SLPZ_VERSION: u32 = 0;
 
-pub const MIN_VERSION_MAJOR: u8 = 3;
-pub const MIN_VERSION_MINOR: u8 = 16;
-
 pub const HEADER_LEN: u64 = 15;
 
-fn read_f32(bytes: &[u8], offset: usize) -> f32 { f32::from_be_bytes(bytes[offset..][..4].try_into().unwrap()) }
-fn read_u32(bytes: &[u8], offset: usize) -> u32 { u32::from_be_bytes(bytes[offset..][..4].try_into().unwrap()) }
-fn read_u16(bytes: &[u8], offset: usize) -> u16 { u16::from_be_bytes(bytes[offset..][..2].try_into().unwrap()) }
-fn read_u8 (bytes: &[u8], offset: usize) -> u8  {  u8::from_be_bytes(bytes[offset..][..1].try_into().unwrap()) }
-fn read_i32(bytes: &[u8], offset: usize) -> i32 { i32::from_be_bytes(bytes[offset..][..4].try_into().unwrap()) }
-fn read_i8 (bytes: &[u8], offset: usize) -> i8  {  i8::from_be_bytes(bytes[offset..][..1].try_into().unwrap()) }
 fn read_array<const SIZE: usize>(bytes: &[u8], offset: usize) -> [u8; SIZE] {
+    if offset + SIZE > bytes.len() { return [0u8; SIZE]; }
     bytes[offset..][..SIZE].try_into().unwrap()
 }
+fn read_f32(bytes: &[u8], offset: usize) -> f32 { f32::from_be_bytes(read_array(bytes, offset)) }
+fn read_u32(bytes: &[u8], offset: usize) -> u32 { u32::from_be_bytes(read_array(bytes, offset)) }
+fn read_u16(bytes: &[u8], offset: usize) -> u16 { u16::from_be_bytes(read_array(bytes, offset)) }
+fn read_u8 (bytes: &[u8], offset: usize) -> u8  {  u8::from_be_bytes(read_array(bytes, offset)) }
+fn read_i32(bytes: &[u8], offset: usize) -> i32 { i32::from_be_bytes(read_array(bytes, offset)) }
+fn read_i8 (bytes: &[u8], offset: usize) -> i8  {  i8::from_be_bytes(read_array(bytes, offset)) }
 
 type EventSizes = [u16; 255];
 
@@ -261,11 +259,10 @@ pub fn parse_game_start(game_start: &[u8]) -> SlpResult<GameStart> {
     if game_start[0] != GAME_START { return Err(SlpError::InvalidFile(InvalidLocation::GameStart)); }
 
     let version = read_array::<4>(game_start, 1);
+    let version_major = version[0];
+    let version_minor = version[1];
+    let version_patch = version[2];
 
-    if version[0] < MIN_VERSION_MAJOR { return Err(SlpError::OutdatedFile) }
-    if version[0] == MIN_VERSION_MAJOR && version[1] < MIN_VERSION_MINOR { return Err(SlpError::OutdatedFile) }
-
-    if game_start.len() < 761 { return Err(SlpError::InvalidFile(InvalidLocation::GameStart)); }
     let game_info_block = &game_start[5..];
 
     let stage = Stage::from_u16(read_u16(game_info_block, 0xE))
@@ -299,11 +296,14 @@ pub fn parse_game_start(game_start: &[u8]) -> SlpResult<GameStart> {
         timer,
         names,
         connect_codes,
+        
+        version_major,
+        version_minor,
+        version_patch,
     })
 }
 
 pub fn parse_item_update(item_update: &[u8]) -> SlpResult<ItemUpdate> {
-    if item_update.len() < 0x2C { return Err(SlpError::InvalidFile(InvalidLocation::ItemUpdate)); }
     if item_update[0] != ITEM_UPDATE { return Err(SlpError::InvalidFile(InvalidLocation::ItemUpdate)); }
 
     Ok(ItemUpdate {
@@ -398,7 +398,6 @@ impl Frame {
 
 
 fn parse_pre_frame_update(pre_frame_update: &[u8]) -> SlpResult<PreFrameUpdate> {
-    if pre_frame_update.len() < 0x41 { return Err(SlpError::InvalidFile(InvalidLocation::PreFrameUpdate)); }
     if pre_frame_update[0] != PRE_FRAME_UPDATE { return Err(SlpError::InvalidFile(InvalidLocation::PreFrameUpdate)); }
 
     Ok(PreFrameUpdate {
@@ -471,10 +470,9 @@ impl PostFrameUpdate {
 }
 
 fn parse_post_frame_update(post_frame_update: &[u8]) -> SlpResult<PostFrameUpdate> {
-    if post_frame_update.len() < 0x55 { return Err(SlpError::InvalidFile(InvalidLocation::PostFrameUpdate)); }
     if post_frame_update[0] != POST_FRAME_UPDATE { return Err(SlpError::InvalidFile(InvalidLocation::PostFrameUpdate)); }
 
-    let character = Character::from_u8_internal(post_frame_update[0x7])
+    let character = Character::from_u8_internal(read_u8(post_frame_update, 0x7))
         .ok_or(SlpError::InvalidFile(InvalidLocation::PostFrameUpdate))?;
 
     Ok(PostFrameUpdate {
@@ -668,6 +666,10 @@ fn merge_metadata(game_start: GameStart, metadata: Metadata) -> GameInfo {
         names                      : game_start.names,
         connect_codes              : game_start.connect_codes,
         duration                   : metadata.duration,
+        
+        version_major              : game_start.version_major,
+        version_minor              : game_start.version_minor,
+        version_patch              : game_start.version_patch,
     }
 }
 

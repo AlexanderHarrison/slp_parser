@@ -36,7 +36,6 @@ impl From<InvalidLocation> for SlpError {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum SlpError {
-    OutdatedFile,
     TooNewFile,
     NotAnSlpFile,
     InvalidFile(InvalidLocation),
@@ -122,6 +121,10 @@ pub struct GameInfo {
 
     /// Not the frame length. Add 123 to get that.
     pub duration: i32,
+    
+    pub version_major: u8,
+    pub version_minor: u8,
+    pub version_patch: u8,
 }
 
 impl GameInfo {
@@ -155,6 +158,9 @@ pub struct GameStart {
     pub timer: u32,
     pub names: [[u8; 31]; 4],
     pub connect_codes: [[u8; 10]; 4],
+    pub version_major: u8,
+    pub version_minor: u8,
+    pub version_patch: u8,
 }
 
 #[derive(Clone, Debug)]
@@ -764,11 +770,6 @@ impl fmt::Display for Action {
 impl fmt::Display for SlpError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", match self {
-            SlpError::OutdatedFile => format!(
-                "Outdated slp file. A version >= {}.{}.0 is required.",
-                MIN_VERSION_MAJOR,
-                MIN_VERSION_MINOR,
-            ),
             SlpError::NotAnSlpFile => "file is not a Slippi Replay (.slp) file".to_owned(),
             SlpError::InvalidFile(InvalidLocation::SlpzDecompression) => "Slpz file is invalid and could not be decompressed".to_owned(),
             SlpError::InvalidFile(InvalidLocation::Metadata) => "Slp file is invalid: metadata could not be parsed".to_owned(),
