@@ -818,6 +818,12 @@ pub struct VectorI8 {
 
 impl VectorI8 {
     pub const NULL: VectorI8 = VectorI8 { x: 0, y: 0 };
+    pub fn as_vector(self) -> Vector {
+        Vector {
+            x: self.x as f32 / 80.0,
+            y: self.y as f32 / 80.0,
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
