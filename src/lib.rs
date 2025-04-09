@@ -77,9 +77,15 @@ pub struct Frame {
 
     // controls
     pub buttons_mask: ButtonsMask,
-    pub analog_trigger_value: f32,
-    pub left_stick_coords: Vector, // processed values
-    pub right_stick_coords: Vector,
+    pub analog_trigger_value: f32, // processed
+    pub left_stick_coords: Vector, // processed
+    pub right_stick_coords: Vector, // processed
+
+    // raw controls
+    pub left_trigger_value_raw: f32, // raw
+    pub right_trigger_value_raw: f32, // raw
+    pub left_stick_coords_raw: VectorI8, // raw
+    pub right_stick_coords_raw: VectorI8, // raw
 
     pub hitstun_misc: f32, // char state var 1
     pub stock_count: u8,
@@ -798,6 +804,20 @@ impl fmt::Display for SlpError {
 pub struct Vector {
     pub x: f32,
     pub y: f32,
+}
+
+impl Vector {
+    pub const NULL: Vector = Vector { x: 0.0, y: 0.0 };
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct VectorI8 {
+    pub x: i8,
+    pub y: i8,
+}
+
+impl VectorI8 {
+    pub const NULL: VectorI8 = VectorI8 { x: 0, y: 0 };
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]

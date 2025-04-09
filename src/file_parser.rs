@@ -358,10 +358,10 @@ struct PreFrameUpdate {
     pub analog_trigger_value: f32,
     pub left_stick_coords: Vector,
     pub right_stick_coords: Vector,
-}
-
-impl Vector {
-    pub const NULL: Vector = Vector { x: 0.0, y: 0.0 };
+    pub left_stick_coords_raw: VectorI8,
+    pub right_stick_coords_raw: VectorI8,
+    pub left_trigger_value_raw: f32,
+    pub right_trigger_value_raw: f32,
 }
 
 impl PreFrameUpdate {
@@ -372,6 +372,10 @@ impl PreFrameUpdate {
         analog_trigger_value: 0.0,
         left_stick_coords: Vector::NULL,
         right_stick_coords: Vector::NULL,
+        left_stick_coords_raw: VectorI8::NULL,
+        right_stick_coords_raw: VectorI8::NULL,
+        left_trigger_value_raw: 0.0,
+        right_trigger_value_raw: 0.0,
     };
 }
 
@@ -393,6 +397,10 @@ impl Frame {
         analog_trigger_value    : 0.0,
         left_stick_coords       : Vector::NULL,
         right_stick_coords      : Vector::NULL,
+        left_stick_coords_raw   : VectorI8::NULL,
+        right_stick_coords_raw  : VectorI8::NULL,
+        left_trigger_value_raw  : 0.0,
+        right_trigger_value_raw : 0.0,
         hitstun_misc            : 0.0,
         percent                 : 0.0,
         stock_count             : 0,
@@ -423,6 +431,16 @@ fn parse_pre_frame_update(pre_frame_update: &[u8]) -> SlpResult<PreFrameUpdate> 
             x                         : read_f32(pre_frame_update, 0x21),
             y                         : read_f32(pre_frame_update, 0x25),
         },
+        left_stick_coords_raw         : VectorI8 {
+            x                         : read_i8(pre_frame_update, 0x3B),
+            y                         : read_i8(pre_frame_update, 0x40),
+        },
+        right_stick_coords_raw        : VectorI8 {
+            x                         : read_i8(pre_frame_update, 0x41),
+            y                         : read_i8(pre_frame_update, 0x42),
+        },
+        left_trigger_value_raw        : read_f32(pre_frame_update, 0x33),
+        right_trigger_value_raw       : read_f32(pre_frame_update, 0x37),
     })
 }
 
@@ -538,6 +556,10 @@ fn merge_pre_post_frames(pre: &PreFrameUpdate, post: &PostFrameUpdate) -> Frame 
         analog_trigger_value: pre.analog_trigger_value,
         left_stick_coords: pre.left_stick_coords,
         right_stick_coords: pre.right_stick_coords,
+        left_stick_coords_raw: pre.left_stick_coords_raw,
+        right_stick_coords_raw: pre.right_stick_coords_raw,
+        left_trigger_value_raw: pre.left_trigger_value_raw,
+        right_trigger_value_raw: pre.right_trigger_value_raw,
         stock_count: post.stock_count,
         jumps_remaining: post.jumps_remaining,
         is_airborne: post.is_airborne,
