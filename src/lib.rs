@@ -817,11 +817,37 @@ pub struct VectorI8 {
 }
 
 impl VectorI8 {
+    /// Maximum after clamping. Raw stick values are not clamped in `Frame`.
+    pub const MAX: i8 = 80;
+
     pub const NULL: VectorI8 = VectorI8 { x: 0, y: 0 };
+
+    /// Performs clamping from the raw range (approx. -110..110) to melee's range (-80..80)
+    ///
+    /// Modified from HSD_PadClamp in decomp.
+    pub fn clamped(self) -> VectorI8 {
+        let mut x = self.x as f32;
+        let mut y = self.y as f32;
+        let r = (x*x + y*y).sqrt();
+        let max = Self::MAX as f32;
+
+        if r > max {
+            x = x * max / r;
+            y = y * max / r;
+        }
+
+        VectorI8 {
+            x: x as i8,
+            y: y as i8,
+        }
+    }
+
+    // Clamps then converts to the -1.0..1.0 range.
     pub fn as_vector(self) -> Vector {
+        let clamped = self.clamped();
         Vector {
-            x: self.x as f32 / 80.0,
-            y: self.y as f32 / 80.0,
+            x: clamped.x as f32 / Self::MAX as f32,
+            y: clamped.y as f32 / Self::MAX as f32,
         }
     }
 }
