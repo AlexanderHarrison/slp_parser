@@ -139,7 +139,7 @@ pub fn parse_file(slp: &[u8]) -> SlpResult<(Game, Notes)> {
                     );
                     item_idx.truncate(frame_idx + 1);
                 }
-                item_idx.push(items.len() as u16);
+                item_idx.push(items.len() as u32);
             }
             FOD_INFO => {
                 let fountain_heights = match stage_info {

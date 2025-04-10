@@ -1,7 +1,8 @@
 fn main() {
-    //let path = std::env::args_os().nth(1).expect("no path given");
-    //let path = std::path::Path::new(&path);
-    for e in std::fs::read_dir("../slippi-js/slp/").unwrap() {
+    let path = std::env::args_os().nth(1).expect("no path given");
+    let path = std::path::Path::new(&path);
+    slp_parser::read_game(path).unwrap();
+    /*for e in std::fs::read_dir("../slippi-js/slp/").unwrap() {
         let e = e.unwrap();
         let path = e.path();
         if path.extension().is_some_and(|s| s == "slp") {
@@ -14,7 +15,7 @@ fn main() {
                 game.info.version_patch,
             );
         }
-    }
+    }*/
 
     /*for port in 0..4 {
         if let Some(ref fr) = game.frames[port] {

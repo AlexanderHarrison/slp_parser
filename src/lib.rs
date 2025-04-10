@@ -177,7 +177,7 @@ pub struct Game {
     pub follower_frames: [Option<Box<[Frame]>>; 4],
 
     /// get item_range with `item_idx[frame]..item_idx[frame+1]`
-    pub item_idx: Box<[u16]>,
+    pub item_idx: Box<[u32]>,
     pub items: Box<[ItemUpdate]>,
     pub info: GameInfo,
 
