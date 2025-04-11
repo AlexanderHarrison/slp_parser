@@ -94,8 +94,69 @@ pub struct Frame {
     pub hitlag_frames: f32,
     pub last_ground_idx: u16,
     pub state_flags: [u8; 5],
-    pub last_hitting_attack_id: u8,
+    pub last_hitting_attack_id: AttackKind,
     pub last_hit_by_instance_id: u16,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct StaleMove {
+    pub attack: AttackKind,
+    pub instance_id: u16,
+}
+
+impl StaleMove {
+    pub const NULL: StaleMove = StaleMove { attack: AttackKind::Null, instance_id: 0 };
+}
+
+pub fn compute_staled_moves(
+    frames: &[Frame],
+    opponent_frames: &[Frame],
+) -> [StaleMove; 10] {
+    assert_eq!(frames.len(), opponent_frames.len());
+    let mut stale_count = 0;
+    let mut stale_moves = [StaleMove::NULL; 10];
+
+    let mut i = frames.len();
+    let mut prev_instance_id = u16::MAX;
+    loop {
+        if i == 0 { break }
+        i -= 1;
+        
+        let instance_id = opponent_frames[i].last_hit_by_instance_id;
+
+        // prevent last move from staling again on opponent death
+        if instance_id == 0 {
+            prev_instance_id = 0;
+        }
+
+        if instance_id != prev_instance_id {
+            let attack = frames[i].last_hitting_attack_id;
+            if attack == AttackKind::Null { break; } // end on death
+
+            // id 1 does not stale
+            if attack != AttackKind::None { 
+                stale_moves[stale_count] = StaleMove { attack, instance_id };
+                stale_count += 1;
+                if stale_count == 10 { break; }
+                prev_instance_id = instance_id;
+            }
+        }
+
+        // for whatever reason, grabbing alters opponent's last_hit_by_instance_id,
+        // so we need to remove that.
+        use StandardActionState as Sas;
+        if matches!(opponent_frames[i].state, ActionState::Standard(Sas::CapturePulledHi | Sas::CapturePulledLw))
+            && stale_count != 0
+            && stale_moves[stale_count-1].instance_id == instance_id
+        {
+            stale_count -= 1;
+        }
+    }
+
+    // reverse order, since we iterated backwards
+    stale_moves[..stale_count].reverse();
+    
+    stale_moves
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -182,7 +243,7 @@ pub struct Game {
     pub info: GameInfo,
 
     pub stage_info: Option<StageInfo>,
-} 
+}
 
 #[derive(Clone, Debug)]
 pub struct FountainHeights {
@@ -901,3 +962,4 @@ impl From<TimeFields> for Time {
 }
 
 fn read_u32(b: &[u8]) -> u32 { u32::from_be_bytes(b[0..4].try_into().unwrap()) }
+

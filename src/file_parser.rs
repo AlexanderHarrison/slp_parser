@@ -409,7 +409,7 @@ impl Frame {
         hitlag_frames           : 0.0,
         last_ground_idx         : 0,
         state_flags             : [0u8; 5],
-        last_hitting_attack_id  : 0,
+        last_hitting_attack_id  : AttackKind::Null,
         last_hit_by_instance_id : 0,
     };
 }
@@ -466,7 +466,7 @@ struct PostFrameUpdate {
     pub last_ground_idx: u16,
     pub hitstun_misc: f32,
     pub state_flags: [u8; 5],
-    pub last_hitting_attack_id: u8,
+    pub last_hitting_attack_id: AttackKind,
     pub last_hit_by_instance_id: u16,
 }
 
@@ -492,7 +492,7 @@ impl PostFrameUpdate {
         last_ground_idx: 0,
         hitstun_misc: 0.0,
         state_flags: [0u8; 5],
-        last_hitting_attack_id: 0,
+        last_hitting_attack_id: AttackKind::Null,
         last_hit_by_instance_id: 0,
     };
 }
@@ -516,7 +516,8 @@ fn parse_post_frame_update(post_frame_update: &[u8]) -> SlpResult<PostFrameUpdat
         direction               : if read_f32(post_frame_update, 0x12) == 1.0 { Direction::Right } else { Direction::Left },
         percent                 : read_f32(post_frame_update, 0x16),
         shield_size             : read_f32(post_frame_update, 0x1A),
-        last_hitting_attack_id  : read_u8(post_frame_update, 0x1E),
+        last_hitting_attack_id  : AttackKind::from_u8(read_u8(post_frame_update, 0x1E))
+            .ok_or(SlpError::InvalidFile(InvalidLocation::PostFrameUpdate))?,
         stock_count             : read_u8(post_frame_update, 0x21),
         anim_frame              : read_f32(post_frame_update, 0x22),
         state_flags             : read_array::<5>(post_frame_update, 0x26),
