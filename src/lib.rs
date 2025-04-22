@@ -153,9 +153,6 @@ pub fn compute_staled_moves(
             stale_count -= 1;
         }
     }
-
-    // reverse order, since we iterated backwards
-    stale_moves[..stale_count].reverse();
     
     stale_moves
 }
