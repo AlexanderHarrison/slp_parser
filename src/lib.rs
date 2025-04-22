@@ -132,7 +132,6 @@ pub fn compute_staled_moves(
         if instance_id != prev_instance_id {
             let attack = frames[i].last_hitting_attack_id;
             if attack == AttackKind::Null { break; } // end on death
-            if stale_count == 0 { dbg!(attack, instance_id); }
 
             // id 1 does not stale
             if attack != AttackKind::None { 
@@ -153,6 +152,9 @@ pub fn compute_staled_moves(
             stale_count -= 1;
         }
     }
+
+    // reverse order, since we iterated backwards
+    stale_moves[..stale_count].reverse();
     
     stale_moves
 }
