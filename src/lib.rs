@@ -196,6 +196,16 @@ pub struct GameInfo {
 }
 
 impl GameInfo {
+    pub fn min_version(&self, mj: u8, mn: u8, pt: u8) -> bool {
+        if self.version_major < mj { return false; }
+        if self.version_major > mj { return true; }
+        if self.version_minor < mn { return false; }
+        if self.version_minor > mn { return true; }
+        if self.version_patch < pt { return false; }
+        if self.version_patch > pt { return true; }
+        true
+    }
+
     /// Returns None if not a two player game
     pub fn low_high_ports(&self) -> Option<(usize, usize)> {
         let mut low_port = None;
