@@ -871,6 +871,72 @@ impl Vector {
     pub const NULL: Vector = Vector { x: 0.0, y: 0.0 };
 }
 
+impl std::ops::Mul<f32> for Vector {
+    type Output = Vector;
+    fn mul(self, n: f32) -> Vector {
+        Vector { x: self.x * n, y: self.y * n }
+    }
+}
+
+impl std::ops::Div<f32> for Vector {
+    type Output = Vector;
+    fn div(self, n: f32) -> Vector {
+        Vector { x: self.x / n, y: self.y / n }
+    }
+}
+
+impl std::ops::Add<f32> for Vector {
+    type Output = Vector;
+    fn add(self, n: f32) -> Vector {
+        Vector { x: self.x + n, y: self.y + n }
+    }
+}
+
+impl std::ops::Add<Vector> for Vector {
+    type Output = Vector;
+    fn add(self, n: Vector) -> Vector {
+        Vector { x: self.x + n.x, y: self.y + n.y }
+    }
+}
+
+impl std::ops::Sub<f32> for Vector {
+    type Output = Vector;
+    fn sub(self, n: f32) -> Vector {
+        Vector { x: self.x - n, y: self.y - n }
+    }
+}
+
+impl std::ops::Sub<Vector> for Vector {
+    type Output = Vector;
+    fn sub(self, n: Vector) -> Vector {
+        Vector { x: self.x - n.x, y: self.y - n.y }
+    }
+}
+
+impl std::ops::MulAssign<f32> for Vector {
+    fn mul_assign(&mut self, n: f32) { *self = *self * n; }
+}
+
+impl std::ops::DivAssign<f32> for Vector {
+    fn div_assign(&mut self, n: f32) { *self = *self / n; }
+}
+
+impl std::ops::AddAssign<f32> for Vector {
+    fn add_assign(&mut self, n: f32) { *self = *self + n; }
+}
+
+impl std::ops::AddAssign<Vector> for Vector {
+    fn add_assign(&mut self, n: Vector) { *self = *self + n; }
+}
+
+impl std::ops::SubAssign<f32> for Vector {
+    fn sub_assign(&mut self, n: f32) { *self = *self - n; }
+}
+
+impl std::ops::SubAssign<Vector> for Vector {
+    fn sub_assign(&mut self, n: Vector) { *self = *self - n; }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct VectorI8 {
     pub x: i8,
