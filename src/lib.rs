@@ -28,6 +28,7 @@ pub enum InvalidLocation {
     PostFrameUpdate,
     StadiumTransformation,
     ParseActionState,
+    EventSlicing,
 }
 
 impl From<InvalidLocation> for SlpError {
@@ -863,6 +864,7 @@ impl fmt::Display for SlpError {
             SlpError::InvalidFile(InvalidLocation::PostFrameUpdate) => "Slp file is invalid: Post Frame Update event could not be parsed".to_owned(),
             SlpError::InvalidFile(InvalidLocation::StadiumTransformation) => "Slp file is invalid: Stadium Transformation event could not be parsed".to_owned(),
             SlpError::InvalidFile(InvalidLocation::ParseActionState) => "Slp file is invalid: invalid ActionState event could not be parsed".to_owned(),
+            SlpError::InvalidFile(InvalidLocation::EventSlicing) => "Slp file is invalid: invalid event could not be parsed".to_owned(),
             SlpError::TooNewFile => "Slp file is too new and unsupported.".to_owned(),
             SlpError::ZstdInitError => "Failed to init zstd.".to_owned(),
             SlpError::FileDoesNotExist => "File does not exist.".to_owned(),

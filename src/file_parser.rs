@@ -48,7 +48,12 @@ pub fn parse_file(slp: &[u8]) -> SlpResult<(Game, Notes)> {
     let EventSizesRet { game_start_offset, event_sizes } = event_sizes(slp, event_sizes_offset)?;
     let game_start_size = event_sizes[GAME_START as usize] as usize + 1;
     let game_start = parse_game_start(&slp[game_start_offset..][..game_start_size])?;
-    let metadata = parse_metadata(&slp[metadata_offset..]);
+    
+    let metadata = if metadata_offset < slp.len() {
+        parse_metadata(&slp[metadata_offset..])
+    } else {
+        return Err(SlpError::InvalidFile(InvalidLocation::Metadata));
+    };
 
     // setup mem for event parsing --------------------------------------------------------
 
@@ -97,6 +102,10 @@ pub fn parse_file(slp: &[u8]) -> SlpResult<(Game, Notes)> {
     while event_cursor < metadata_offset {
         let event_cmd = slp[event_cursor];
         let event_size = event_sizes[event_cmd as usize] as usize + 1;
+        
+        if slp.len() < event_cursor + event_size {
+            return Err(SlpError::InvalidFile(InvalidLocation::EventSlicing));
+        }
         let event_bytes = &slp[event_cursor..][..event_size];
         event_cursor += event_size;
 
@@ -746,26 +755,26 @@ pub struct Metadata {
     pub time: Time,
 }
 
+impl Metadata {
+    pub const NULL: Metadata = Metadata {
+        duration: -1,
+        time: Time::NULL
+    };
+}
+
 // expects the natural part of the metadata, the notes and diagrams need not be included.
 fn parse_metadata(bytes: &[u8]) -> Metadata {
-    let time;
+    let mut metadata = Metadata::NULL;
+
     if let Some(i) = bytes.windows(7).position(|w| w == b"startAt") {
-        time = parse_timestamp(&bytes[i+10..i+30]).unwrap_or(Time::NULL);
-    } else {
-        time = Time::NULL;
+        metadata.time = parse_timestamp(&bytes[i+10..i+30]).unwrap_or(Time::NULL);
     }
 
-    let duration;
     if let Some(i) = bytes.windows(9).position(|w| w == b"lastFrame") {
-        duration = i32::from_be_bytes(bytes[(i+10)..(i+14)].try_into().unwrap());
-    } else {
-        duration = -1;
+        metadata.duration = i32::from_be_bytes(bytes[(i+10)..(i+14)].try_into().unwrap());
     }
-
-    Metadata {
-        duration,
-        time,
-    }
+    
+    metadata
 }
 
 /// expects metadata
