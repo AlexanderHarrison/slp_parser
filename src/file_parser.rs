@@ -597,6 +597,7 @@ pub fn event_sizes(slp: &[u8], event_sizes_offset: usize) -> SlpResult<EventSize
 
     let info_size = slp[event_sizes_offset+1] as usize;
     if slp.len() < event_sizes_offset + info_size + 1 { return Err(SlpError::InvalidFile(InvalidLocation::EventSizes)) }
+    if info_size == 0 { return Err(SlpError::InvalidFile(InvalidLocation::EventSizes)) }
     let event_count = (info_size - 1) / 3;
 
     let mut event_sizes = [0; 255];
