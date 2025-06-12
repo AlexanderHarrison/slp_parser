@@ -420,6 +420,7 @@ impl Frame {
         state_flags             : [0u8; 5],
         last_hitting_attack_id  : AttackKind::Null,
         last_hit_by_instance_id : 0,
+        vuln_state              : VulnState::Vulnerable,
     };
 }
 
@@ -469,6 +470,7 @@ struct PostFrameUpdate {
     pub shield_size: f32,
     pub stock_count: u8,
     pub jumps_remaining: u8,
+    pub vuln_state: VulnState,
     pub percent: f32,
     pub is_airborne: bool,
     pub hitlag_frames: f32,
@@ -495,6 +497,7 @@ impl PostFrameUpdate {
         shield_size: 0.0,
         stock_count: 0,
         jumps_remaining: 0,
+        vuln_state: VulnState::Vulnerable,
         percent: 0.0,
         is_airborne: false,
         hitlag_frames: 0.0,
@@ -534,6 +537,8 @@ fn parse_post_frame_update(post_frame_update: &[u8]) -> SlpResult<PostFrameUpdat
         is_airborne             : read_u8(post_frame_update, 0x2F) != 0,
         last_ground_idx         : read_u16(post_frame_update, 0x30),
         jumps_remaining         : read_u8(post_frame_update, 0x32),
+        vuln_state              : VulnState::from_u8(read_u8(post_frame_update, 0x34))
+            .ok_or(SlpError::InvalidFile(InvalidLocation::PostFrameUpdate))?,
         velocity                : Vector {
             x                   : read_f32(post_frame_update, 0x35),
             y                   : read_f32(post_frame_update, 0x39),
@@ -580,6 +585,7 @@ fn merge_pre_post_frames(pre: &PreFrameUpdate, post: &PostFrameUpdate) -> Frame 
         state_flags: post.state_flags,
         last_hitting_attack_id: post.last_hitting_attack_id,
         last_hit_by_instance_id: post.last_hit_by_instance_id,
+        vuln_state: post.vuln_state,
     }
 }
 

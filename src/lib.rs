@@ -59,6 +59,24 @@ pub struct Action {
     pub frame_end: usize,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum VulnState {
+    Vulnerable = 0,
+    Invulnerable,
+    Intangible,
+}
+
+impl VulnState {
+    pub fn from_u8(n: u8) -> Option<Self> {
+        Some(match n {
+            0 => VulnState::Vulnerable,
+            1 => VulnState::Invulnerable,
+            2 => VulnState::Intangible,
+            _ => return None,
+        })
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Frame {
     pub character: Character,
@@ -97,6 +115,7 @@ pub struct Frame {
     pub state_flags: [u8; 5],
     pub last_hitting_attack_id: AttackKind,
     pub last_hit_by_instance_id: u16,
+    pub vuln_state: VulnState,
 }
 
 #[derive(Copy, Clone, Debug)]
