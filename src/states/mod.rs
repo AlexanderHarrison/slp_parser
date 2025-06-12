@@ -153,6 +153,31 @@ impl ActionState {
             ActionState::Special(_) => panic!("Assert in ActionState: 'assert_standard' failed"),
         }
     }
+    
+    pub fn is_hitstun(self) -> bool {
+        match self {
+            ActionState::Standard(
+                StandardActionState::DamageHi1                
+                | StandardActionState::DamageHi2               
+                | StandardActionState::DamageHi3               
+                | StandardActionState::DamageN1                
+                | StandardActionState::DamageN2                
+                | StandardActionState::DamageN3                
+                | StandardActionState::DamageLw1               
+                | StandardActionState::DamageLw2               
+                | StandardActionState::DamageLw3               
+                | StandardActionState::DamageAir1              
+                | StandardActionState::DamageAir2              
+                | StandardActionState::DamageAir3              
+                | StandardActionState::DamageFlyHi             
+                | StandardActionState::DamageFlyN              
+                | StandardActionState::DamageFlyLw             
+                | StandardActionState::DamageFlyTop            
+                | StandardActionState::DamageFlyRoll           
+            ) => true,
+            _ => false,
+        }
+    } 
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
