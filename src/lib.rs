@@ -142,6 +142,10 @@ pub fn compute_staled_moves(
         if i == 0 { break }
         i -= 1;
         
+        if let ActionState::Standard(StandardActionState::Rebirth) = frames[i].state {
+            break;
+        }
+        
         let instance_id = opponent_frames[i].last_hit_by_instance_id;
 
         // prevent last move from staling again on opponent death
