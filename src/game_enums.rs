@@ -99,6 +99,14 @@ pub enum AttackKind {
     AttackKind55 = 0x55,
     AttackKind56 = 0x56,
     AttackKind57 = 0x57,
+    AttackKind58 = 0x58,
+    AttackKind59 = 0x59,
+    AttackKind5A = 0x5A,
+    AttackKind5B = 0x5B,
+    AttackKind5C = 0x5C,
+    AttackKind5D = 0x5D,
+    AttackKind5E = 0x5E,
+    AttackKind5F = 0x5F,
 }
 
 impl AttackKind {
@@ -189,6 +197,14 @@ impl AttackKind {
             AttackKind::AttackKind55               => "AttackKind55",
             AttackKind::AttackKind56               => "AttackKind56",
             AttackKind::AttackKind57               => "AttackKind57",
+            AttackKind::AttackKind58               => "AttackKind58",
+            AttackKind::AttackKind59               => "AttackKind59",
+            AttackKind::AttackKind5A               => "AttackKind5A",
+            AttackKind::AttackKind5B               => "AttackKind5B",
+            AttackKind::AttackKind5C               => "AttackKind5C",
+            AttackKind::AttackKind5D               => "AttackKind5D",
+            AttackKind::AttackKind5E               => "AttackKind5E",
+            AttackKind::AttackKind5F               => "AttackKind5F",
         }
     }
 
@@ -279,6 +295,14 @@ impl AttackKind {
             0x55 => AttackKind::AttackKind55              ,
             0x56 => AttackKind::AttackKind56              ,
             0x57 => AttackKind::AttackKind57              ,
+            0x58 => AttackKind::AttackKind58              ,
+            0x59 => AttackKind::AttackKind59              ,
+            0x5A => AttackKind::AttackKind5A              ,
+            0x5B => AttackKind::AttackKind5B              ,
+            0x5C => AttackKind::AttackKind5C              ,
+            0x5D => AttackKind::AttackKind5D              ,
+            0x5E => AttackKind::AttackKind5E              ,
+            0x5F => AttackKind::AttackKind5F              ,
             _ => return None
         })
     }
