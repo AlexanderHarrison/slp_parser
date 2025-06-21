@@ -387,7 +387,7 @@ impl Stage {
             Stage::KongoJungle          => 0x04,
             Stage::Brinstar             => 0x08,
             Stage::Corneria             => 0x0E,
-            Stage::YoshisStory          => 0x0B,
+            Stage::YoshisStory          => 0x0A,
             Stage::Onett                => 0x14,
             Stage::MuteCity             => 0x12,
             Stage::RainbowCruise        => 0x03,
