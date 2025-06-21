@@ -541,7 +541,10 @@ pub fn write_notes_to_game(path: &Path, notes: &Notes) -> SlpResult<()> {
         }
 
         let RawHeaderRet { event_sizes_offset: _, metadata_offset } = parse_raw_header(&buf)?;
-
+        if metadata_offset == 0 {
+            return Err(SlpError::InvalidFile(InvalidLocation::Metadata))
+        }
+        
         let mut metadata = Vec::new();
         file.seek(std::io::SeekFrom::Start(metadata_offset as u64))?;
         file.read_to_end(&mut metadata)?;

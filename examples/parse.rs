@@ -1,7 +1,9 @@
 fn main() {
     let path = std::env::args_os().nth(1).expect("no path given");
     let path = std::path::Path::new(&path);
-    slp_parser::read_game(path).unwrap();
+    let (game, _) = slp_parser::read_game(path).unwrap();
+    dbg!(game.info);
+    
     /*for e in std::fs::read_dir("../slippi-js/slp/").unwrap() {
         let e = e.unwrap();
         let path = e.path();

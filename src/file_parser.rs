@@ -49,7 +49,10 @@ pub fn parse_file(slp: &[u8]) -> SlpResult<(Game, Notes)> {
     let game_start_size = event_sizes[GAME_START as usize] as usize + 1;
     let game_start = parse_game_start(&slp[game_start_offset..][..game_start_size])?;
     
-    let metadata = if metadata_offset < slp.len() {
+    let metadata = if metadata_offset == 0 {
+        // occasionally the raw len is written incorrectly. Just skip parsing in this case.
+        Metadata::NULL
+    } else if metadata_offset < slp.len() {
         parse_metadata(&slp[metadata_offset..])
     } else {
         return Err(SlpError::InvalidFile(InvalidLocation::Metadata));
@@ -99,12 +102,15 @@ pub fn parse_file(slp: &[u8]) -> SlpResult<(Game, Notes)> {
     // event parsing --------------------------------------------------------
 
     let mut event_cursor = game_start_offset + game_start_size;
-    while event_cursor < metadata_offset {
+    while event_cursor < slp.len() {
         let event_cmd = slp[event_cursor];
         let event_size = event_sizes[event_cmd as usize] as usize + 1;
         
         if slp.len() < event_cursor + event_size {
-            return Err(SlpError::InvalidFile(InvalidLocation::EventSlicing));
+            // in files where the game end is not written correctly,
+            // we just break early. Nothing we can do here,
+            // and the file is perfectly fine otherwise.
+            break;
         }
         let event_bytes = &slp[event_cursor..][..event_size];
         event_cursor += event_size;
@@ -233,7 +239,11 @@ pub fn parse_file(slp: &[u8]) -> SlpResult<(Game, Notes)> {
     // finish up --------------------------------------------------------
 
     let info = merge_metadata(game_start, metadata);
-    let notes = parse_notes(&slp[metadata_offset..]);
+    let notes = if metadata_offset == 0 {
+        Notes::NULL
+    } else {
+        parse_notes(&slp[metadata_offset..])
+    };
 
     let mut frames = [None, None, None, None];
     let mut follower_frames = [None, None, None, None];
@@ -637,9 +647,10 @@ pub fn parse_raw_header(slp: &[u8]) -> SlpResult<RawHeaderRet> {
     }
 
     let raw_len = read_u32(slp, HEADER.len()) as usize;
+    let metadata_offset = if raw_len == 0 { 0 } else { HEADER.len() + raw_len };
     Ok(RawHeaderRet {
         event_sizes_offset: HEADER.len() + 4,
-        metadata_offset: HEADER.len() + raw_len,
+        metadata_offset,
     })
 }
 
@@ -659,13 +670,17 @@ pub fn parse_file_info(reader: &mut (impl std::io::Read + std::io::Seek)) -> Slp
     let EventSizesRet { game_start_offset, event_sizes } = event_sizes(&buf, event_sizes_offset)?;
     let game_start_size = event_sizes[GAME_START as usize] as usize + 1;
     let game_start = parse_game_start(&buf[game_start_offset..][..game_start_size])?;
-
-    reader.seek(std::io::SeekFrom::Start(metadata_offset as u64))?;
-    let read_count = reader.read(&mut buf)?;
-
-    // this will truncate the metadata if it contains diagrams, but that is perfectly fine, nothing we need is there.
-    let metadata = parse_metadata(&buf[..read_count]);
-
+    
+    let metadata = if metadata_offset != 0 {
+        reader.seek(std::io::SeekFrom::Start(metadata_offset as u64))?;
+        let read_count = reader.read(&mut buf)?;
+    
+        // this will truncate the metadata if it contains diagrams, but that is perfectly fine, nothing we need is there.
+        parse_metadata(&buf[..read_count])
+    } else {
+        Metadata::NULL
+    };
+    
     Ok(merge_metadata(game_start, metadata))
 }
 
