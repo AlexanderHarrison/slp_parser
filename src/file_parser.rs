@@ -102,7 +102,8 @@ pub fn parse_file(slp: &[u8]) -> SlpResult<(Game, Notes)> {
     // event parsing --------------------------------------------------------
 
     let mut event_cursor = game_start_offset + game_start_size;
-    while event_cursor < slp.len() {
+    let end = if metadata_offset == 0 { slp.len() } else { metadata_offset };
+    while event_cursor < end {
         let event_cmd = slp[event_cursor];
         let event_size = event_sizes[event_cmd as usize] as usize + 1;
         
@@ -123,6 +124,11 @@ pub fn parse_file(slp: &[u8]) -> SlpResult<(Game, Notes)> {
                 let pre_frame = parse_pre_frame_update(event_bytes)?;
                 let mut temp_idx = pre_frame.port_idx as usize;
                 if pre_frame.is_follower { temp_idx += 4 }
+                
+                // In the case that game end is not written, and the raw len is zero,
+                // we probably ended up reading the metadata as events. So we break
+                // and hope for the best.
+                if temp_idx > pre_frame_temp.len() { break; }
                 pre_frame_temp[temp_idx] = pre_frame;
             }
             POST_FRAME_UPDATE => {
