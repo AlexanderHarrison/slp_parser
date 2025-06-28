@@ -446,6 +446,18 @@ impl Stage {
             Stage::FinalDestination     => "Final Destination",
         }
     }
+    
+    pub fn is_legal(self) -> bool {
+        match self {
+            Stage::FountainOfDreams     => true,
+            Stage::PokemonStadium       => true,
+            Stage::YoshisStory          => true,
+            Stage::DreamLandN64         => true,
+            Stage::Battlefield          => true,
+            Stage::FinalDestination     => true,
+            _ => false,
+        }
+    }
 
     pub fn as_str_short(self) -> &'static str {
         match self {
