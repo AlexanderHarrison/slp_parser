@@ -214,6 +214,8 @@ pub struct GameInfo {
     /// Not the frame length. Add 123 to get that.
     pub duration: i32,
     
+    pub has_notes: bool,
+    
     pub version_major: u8,
     pub version_minor: u8,
     pub version_patch: u8,
@@ -275,8 +277,8 @@ pub struct Game {
     pub item_idx: Box<[u32]>,
     pub items: Box<[ItemUpdate]>,
     pub info: GameInfo,
-
     pub stage_info: Option<StageInfo>,
+    pub notes: Notes,
 }
 
 #[derive(Clone, Debug)]
@@ -489,7 +491,7 @@ pub fn read_info(path: &Path) -> SlpResult<GameInfo> {
     Ok(info)
 }
 
-pub fn read_game(path: &Path) -> SlpResult<(Game, Notes)> {
+pub fn read_game(path: &Path) -> SlpResult<Game> {
     use std::io::Read;
 
     let mut file = std::fs::File::open(path).map_err(|_| SlpError::FileDoesNotExist)?;

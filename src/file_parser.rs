@@ -34,14 +34,14 @@ fn read_i8 (bytes: &[u8], offset: usize) -> i8  {  i8::from_be_bytes(read_array(
 
 type EventSizes = [u16; 255];
 
-pub fn parse_file_slpz(slpz: &[u8]) -> SlpResult<(Game, Notes)> {
+pub fn parse_file_slpz(slpz: &[u8]) -> SlpResult<Game> {
     let mut decompressor = slpz::Decompressor::new().ok_or(SlpError::ZstdInitError)?;
     let slp = slpz::decompress(&mut decompressor, slpz)
         .map_err(|_| SlpError::InvalidFile(InvalidLocation::SlpzDecompression))?;
     parse_file(&slp)
 }
 
-pub fn parse_file(slp: &[u8]) -> SlpResult<(Game, Notes)> {
+pub fn parse_file(slp: &[u8]) -> SlpResult<Game> {
     // parse header and metadata --------------------------------------------------------
 
     let RawHeaderRet { event_sizes_offset, metadata_offset } = parse_raw_header(slp)?;
@@ -276,9 +276,10 @@ pub fn parse_file(slp: &[u8]) -> SlpResult<(Game, Notes)> {
         items: items.into(),
         info,
         stage_info,
+        notes,
     };
 
-    Ok((game, notes))
+    Ok(game)
 }
 
 // EVENTS ------------------------------------------------------------------------
@@ -736,7 +737,7 @@ fn merge_metadata(game_start: GameStart, metadata: Metadata) -> GameInfo {
         names                      : game_start.names,
         connect_codes              : game_start.connect_codes,
         duration                   : metadata.duration,
-        
+        has_notes                  : metadata.has_notes,
         version_major              : game_start.version_major,
         version_minor              : game_start.version_minor,
         version_patch              : game_start.version_patch,
@@ -781,25 +782,82 @@ impl Notes {
 pub struct Metadata {
     pub duration: i32,
     pub time: Time,
+    pub has_notes: bool,
 }
 
 impl Metadata {
     pub const NULL: Metadata = Metadata {
         duration: -1,
-        time: Time::NULL
+        time: Time::NULL,
+        has_notes: false,
     };
+}
+
+fn parse_object_header(bytes: &[u8], name: &[u8]) -> Option<usize> {
+    let data_i = bytes.windows(name.len()).position(|w| w == name)?;
+    Some(data_i+name.len()+1)
+}
+
+fn parse_string(bytes: &[u8], name: &[u8]) -> Option<(usize, String)> {
+    let data_i = bytes.windows(name.len()).position(|w| w == name)?;
+    let data_len = i32::from_be_bytes(bytes[data_i+name.len()+2..][..4].try_into().unwrap()) as usize;
+    let data = std::str::from_utf8(&bytes[data_i+name.len()+6..][..data_len]).unwrap().to_string();
+    Some((data_i+data_len+name.len()+6, data))
+}
+
+fn parse_i32(bytes: &[u8], name: &[u8]) -> Option<(usize, i32)> {
+    let count_i = bytes.windows(name.len()).position(|w| w == name)?;
+    let num = i32::from_be_bytes(bytes[count_i+name.len()+1..][..4].try_into().unwrap());
+    Some((count_i+name.len()+5, num))
+}
+
+fn parse_array(bytes: &[u8], count: usize, vec: &mut Vec<i32>, name: &[u8]) -> Option<usize> {
+    vec.reserve_exact(count);
+
+    let arr_i = bytes.windows(name.len()).position(|w| w == name)?;
+    let end = arr_i+name.len()+1+count*5;
+    let data = &bytes[(arr_i+name.len()+1)..end];
+
+    for c in data.chunks(5) {
+        vec.push(i32::from_be_bytes(c[1..].try_into().ok()?))
+    }
+
+    Some(end)
 }
 
 // expects the natural part of the metadata, the notes and diagrams need not be included.
 fn parse_metadata(bytes: &[u8]) -> Metadata {
     let mut metadata = Metadata::NULL;
-
+    let mut end = 0;
+    
     if let Some(i) = bytes.windows(7).position(|w| w == b"startAt") {
+        end = i + 30;
         metadata.time = parse_timestamp(&bytes[i+10..i+30]).unwrap_or(Time::NULL);
     }
 
     if let Some(i) = bytes.windows(9).position(|w| w == b"lastFrame") {
+        end = end.max(i + 14);
         metadata.duration = i32::from_be_bytes(bytes[(i+10)..(i+14)].try_into().unwrap());
+    }
+    
+    // Only prune bytes after parsing native fields, as we don't know their order.
+    // But we do know notes come after.
+    let mut bytes = &bytes[end..];
+    if let Some(i) = parse_object_header(bytes, b"notes") {
+        'find_notes: {
+            bytes = &bytes[i..];
+            
+            let (end, count) = parse_i32(bytes, b"count").unwrap();
+            if count != 0 {
+                metadata.has_notes = true;
+                break 'find_notes;
+            }
+            bytes = &bytes[end..];
+        
+            if let Some((_, image_count)) = parse_i32(bytes, b"imageCount") {
+                if image_count != 0 { metadata.has_notes = true; }
+            }
+        }
     }
     
     metadata
@@ -815,38 +873,6 @@ pub fn parse_notes(metadata: &[u8]) -> Notes {
     let mut image_start_frames = Vec::new();
     let mut image_frame_lengths = Vec::new();
     let mut image_compressed_data = Vec::new();
-
-    fn parse_object_header(bytes: &[u8], name: &[u8]) -> Option<usize> {
-        let data_i = bytes.windows(name.len()).position(|w| w == name)?;
-        Some(data_i+name.len()+1)
-    }
-
-    fn parse_string(bytes: &[u8], name: &[u8]) -> Option<(usize, String)> {
-        let data_i = bytes.windows(name.len()).position(|w| w == name)?;
-        let data_len = i32::from_be_bytes(bytes[data_i+name.len()+2..][..4].try_into().unwrap()) as usize;
-        let data = std::str::from_utf8(&bytes[data_i+name.len()+6..][..data_len]).unwrap().to_string();
-        Some((data_i+data_len+name.len()+6, data))
-    }
-
-    fn parse_i32(bytes: &[u8], name: &[u8]) -> Option<(usize, i32)> {
-        let count_i = bytes.windows(name.len()).position(|w| w == name)?;
-        let num = i32::from_be_bytes(bytes[count_i+name.len()+1..][..4].try_into().unwrap());
-        Some((count_i+name.len()+5, num))
-    }
-
-    fn parse_array(bytes: &[u8], count: usize, vec: &mut Vec<i32>, name: &[u8]) -> Option<usize> {
-        vec.reserve_exact(count);
-
-        let arr_i = bytes.windows(name.len()).position(|w| w == name)?;
-        let end = arr_i+name.len()+1+count*5;
-        let data = &bytes[(arr_i+name.len()+1)..end];
-
-        for c in data.chunks(5) {
-            vec.push(i32::from_be_bytes(c[1..].try_into().ok()?))
-        }
-
-        Some(end)
-    }
 
     if let Some(i) = parse_object_header(metadata, b"notes") {
         let mut bytes = &metadata[i..];

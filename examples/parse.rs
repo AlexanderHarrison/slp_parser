@@ -25,13 +25,14 @@ fn main() {
     let path = std::env::args_os().nth(1).expect("no path given");
     let path = std::path::Path::new(&path);
     
-    let mut replays = Vec::new();
-    get_all_replays(&mut replays, std::path::Path::new("/home/alex/Slippi/")).unwrap();
+    // let mut replays = Vec::new();
+    // get_all_replays(&mut replays, std::path::Path::new("/home/alex/Slippi/")).unwrap();
     
     // for path in replays {
         // dbg!(&path);
         let (game, _) = slp_parser::read_game(&path).unwrap();
         dbg!(game.frames.map(|g| g.map(|g| g.len())));
+        dbg!(game.info);
     // }
     
     /*for e in std::fs::read_dir("../slippi-js/slp/").unwrap() {
