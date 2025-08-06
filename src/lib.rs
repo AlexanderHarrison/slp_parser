@@ -197,6 +197,7 @@ pub struct ItemUpdate {
     pub charge_shot_power: u8,
     pub spawn_id: u32,
     pub owner: i8,
+    pub instance_id: u16,
 }
 
 /// Names and codes are null terminated Shift JIS strings. 

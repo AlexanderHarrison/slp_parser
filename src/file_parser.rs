@@ -357,6 +357,7 @@ pub fn parse_item_update(item_update: &[u8]) -> SlpResult<ItemUpdate> {
         charge_shot_launched : read_u8(item_update, 0x28) != 0,
         charge_shot_power    : read_u8(item_update, 0x29),
         owner                : read_i8(item_update, 0x2A),
+        instance_id          : read_u16(item_update, 0x2B),
     })
 }
 
