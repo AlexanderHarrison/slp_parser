@@ -438,6 +438,7 @@ impl Frame {
         last_hitting_attack_id  : AttackKind::Null,
         last_hit_by_instance_id : 0,
         vuln_state              : VulnState::Vulnerable,
+        instance_id             : 0,
     };
 }
 
@@ -496,6 +497,7 @@ struct PostFrameUpdate {
     pub state_flags: [u8; 5],
     pub last_hitting_attack_id: AttackKind,
     pub last_hit_by_instance_id: u16,
+    pub instance_id: u16,
 }
 
 impl PostFrameUpdate {
@@ -523,6 +525,7 @@ impl PostFrameUpdate {
         state_flags: [0u8; 5],
         last_hitting_attack_id: AttackKind::Null,
         last_hit_by_instance_id: 0,
+        instance_id: 0,
     };
 }
 
@@ -567,6 +570,7 @@ fn parse_post_frame_update(post_frame_update: &[u8]) -> SlpResult<PostFrameUpdat
         ground_x_velocity       : read_f32(post_frame_update, 0x45),
         hitlag_frames           : read_f32(post_frame_update, 0x49),
         last_hit_by_instance_id : read_u16(post_frame_update, 0x51),
+        instance_id             : read_u16(post_frame_update, 0x53),
     })
 }
 
@@ -603,6 +607,7 @@ fn merge_pre_post_frames(pre: &PreFrameUpdate, post: &PostFrameUpdate) -> Frame 
         last_hitting_attack_id: post.last_hitting_attack_id,
         last_hit_by_instance_id: post.last_hit_by_instance_id,
         vuln_state: post.vuln_state,
+        instance_id: post.instance_id,
     }
 }
 

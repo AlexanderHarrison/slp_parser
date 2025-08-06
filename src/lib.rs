@@ -115,6 +115,7 @@ pub struct Frame {
     pub state_flags: [u8; 5],
     pub last_hitting_attack_id: AttackKind,
     pub last_hit_by_instance_id: u16,
+    pub instance_id: u16,
     pub vuln_state: VulnState,
 }
 
