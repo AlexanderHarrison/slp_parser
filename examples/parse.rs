@@ -30,9 +30,10 @@ fn main() {
     
     // for path in replays {
         // dbg!(&path);
-        let (game, _) = slp_parser::read_game(&path).unwrap();
+        let game = slp_parser::read_game(&path).unwrap();
         dbg!(game.frames.map(|g| g.map(|g| g.len())));
         dbg!(game.info);
+        dbg!(game.info.team_ports());
     // }
     
     /*for e in std::fs::read_dir("../slippi-js/slp/").unwrap() {

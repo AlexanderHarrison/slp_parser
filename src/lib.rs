@@ -206,6 +206,11 @@ pub struct ItemUpdate {
 pub struct GameInfo {
     pub stage: Stage,
     pub port_used: [bool; 4],
+    
+    /// Team idx (0 = red, 1 = blue, 3 = green) if teams, otherwise port idx.
+    /// 0 if port is unused.
+    pub teams: [u8; 4],
+    
     pub starting_character_colours: [Option<CharacterColour>; 4],
     pub names: [[u8; 31]; 4],
     pub connect_codes: [[u8; 10]; 4],
@@ -217,10 +222,24 @@ pub struct GameInfo {
     pub duration: i32,
     
     pub has_notes: bool,
+    pub is_teams: bool,
     
     pub version_major: u8,
     pub version_minor: u8,
     pub version_patch: u8,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct TeamPorts {
+    pub count: u8,
+    pub ports: [u8; 4],
+}
+
+impl TeamPorts {
+    pub const NULL: TeamPorts = TeamPorts {
+        count: 0,
+        ports: [0u8; 4],
+    };
 }
 
 impl GameInfo {
@@ -233,6 +252,22 @@ impl GameInfo {
         if self.version_patch > pt { return true; }
         true
     }
+    
+    pub fn team_ports(&self) -> [TeamPorts; 4] {
+        let mut team_ports = [TeamPorts::NULL; 4];
+        
+        for port_idx in 0u8..4 {
+            if !self.port_used[port_idx as usize] { continue; }
+            let team = self.teams[port_idx as usize];
+            let tp = &mut team_ports[team as usize];
+            tp.ports[tp.count as usize] = port_idx;
+            tp.count += 1;
+        }
+        
+        team_ports
+    }
+    
+    // pub fn teams(&self) -> [Option<>] {
 
     /// Returns None if not a two player game
     pub fn low_high_ports(&self) -> Option<(usize, usize)> {
@@ -262,8 +297,10 @@ pub struct GameStart {
     pub stage: Stage,
     pub starting_character_colours: [Option<CharacterColour>; 4],
     pub timer: u32,
+    pub teams: [u8; 4],
     pub names: [[u8; 31]; 4],
     pub connect_codes: [[u8; 10]; 4],
+    pub is_teams: bool,
     pub version_major: u8,
     pub version_minor: u8,
     pub version_patch: u8,

@@ -301,12 +301,15 @@ pub fn parse_game_start(game_start: &[u8]) -> SlpResult<GameStart> {
 
     let game_info_block = &game_start[5..];
 
+    let is_teams = read_u8(game_info_block, 0x8) != 0;
+    
     let stage = Stage::from_u16(read_u16(game_info_block, 0xE))
         .ok_or(SlpError::InvalidFile(InvalidLocation::GameStart))?;
 
     let timer = read_u32(game_info_block, 0x10);
     
     let mut starting_character_colours = [None; 4];
+    let mut teams = [0; 4];
     let mut names = [[0u8; 31]; 4];
     let mut connect_codes = [[0u8; 10]; 4];
 
@@ -324,6 +327,18 @@ pub fn parse_game_start(game_start: &[u8]) -> SlpResult<GameStart> {
         starting_character_colours[i] = Some(character_colour);
         names[i] = read_array::<31>(game_start, 0x1A5 + 0x1F*i);
         connect_codes[i] = read_array::<10>(game_start, 0x221 + 0xA*i);
+        
+        // parse team.
+        if is_teams {
+            let mut team = read_u8(game_info_block, 0x69 + 0x24*i);
+            // Slippi records the green team as team id 2.
+            // But it makes more sense to record it as team id 3 to me,
+            // just to match the colours up.
+            if team == 2 { team = 3; }
+            teams[i] = team;
+        } else {
+            teams[i] = i as u8;
+        }
     }
 
     Ok(GameStart {
@@ -332,7 +347,8 @@ pub fn parse_game_start(game_start: &[u8]) -> SlpResult<GameStart> {
         timer,
         names,
         connect_codes,
-        
+        teams,
+        is_teams,
         version_major,
         version_minor,
         version_patch,
@@ -741,9 +757,11 @@ fn merge_metadata(game_start: GameStart, metadata: Metadata) -> GameInfo {
         start_time                 : metadata.time,
         timer                      : game_start.timer,
         names                      : game_start.names,
+        teams                      : game_start.teams,
         connect_codes              : game_start.connect_codes,
         duration                   : metadata.duration,
         has_notes                  : metadata.has_notes,
+        is_teams                   : game_start.is_teams,
         version_major              : game_start.version_major,
         version_minor              : game_start.version_minor,
         version_patch              : game_start.version_patch,
