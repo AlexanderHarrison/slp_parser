@@ -259,6 +259,11 @@ impl GameInfo {
         true
     }
     
+    pub fn character_colour(&self, frame: &Frame) -> CharacterColour {
+        let costume = self.starting_character_colours[frame.port_idx as usize].unwrap().costume_idx();
+        CharacterColour::from_character_and_colour(frame.character, costume).unwrap()
+    }
+    
     pub fn team_ports(&self) -> [TeamPorts; 4] {
         let mut team_ports = [TeamPorts::NULL; 4];
         
