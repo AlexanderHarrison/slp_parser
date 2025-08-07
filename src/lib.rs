@@ -131,14 +131,16 @@ impl StaleMove {
 
 pub fn compute_staled_moves(
     frames: &[Frame],
-    opponent_frames: &[Frame],
+    other_frames: &[&[Frame]],
 ) -> [StaleMove; 10] {
-    assert_eq!(frames.len(), opponent_frames.len());
+    for opponent_frames in other_frames {
+        assert_eq!(frames.len(), opponent_frames.len());
+    }
     let mut stale_count = 0;
     let mut stale_moves = [StaleMove::NULL; 10];
 
     let mut i = frames.len();
-    let mut prev_instance_id = u16::MAX;
+    let mut prev_hit_by_id = u16::MAX;
     loop {
         if i == 0 { break }
         i -= 1;
@@ -147,34 +149,38 @@ pub fn compute_staled_moves(
             break;
         }
         
-        let instance_id = opponent_frames[i].last_hit_by_instance_id;
-
-        // prevent last move from staling again on opponent death
-        if instance_id == 0 {
-            prev_instance_id = 0;
-        }
-
-        if instance_id != prev_instance_id {
-            let attack = frames[i].last_hitting_attack_id;
-            if attack == AttackKind::Null { break; } // end on death
-
-            // id 1 does not stale
-            if attack != AttackKind::None { 
-                stale_moves[stale_count] = StaleMove { attack, instance_id };
-                stale_count += 1;
-                if stale_count == 10 { break; }
-                prev_instance_id = instance_id;
+        let cur_id = frames[i].instance_id;
+        
+        for opponent_frames in other_frames {
+            let hit_by_id = opponent_frames[i].last_hit_by_instance_id;
+    
+            // prevent last move from staling again on opponent death
+            if hit_by_id == 0 {
+                prev_hit_by_id = 0;
             }
-        }
-
-        // for whatever reason, grabbing alters opponent's last_hit_by_instance_id,
-        // so we need to remove that.
-        use StandardActionState as Sas;
-        if matches!(opponent_frames[i].state, ActionState::Standard(Sas::CapturePulledHi | Sas::CapturePulledLw))
-            && stale_count != 0
-            && stale_moves[stale_count-1].instance_id == instance_id
-        {
-            stale_count -= 1;
+    
+            if cur_id == hit_by_id && hit_by_id != prev_hit_by_id {
+                let attack = frames[i].last_hitting_attack_id;
+                if attack == AttackKind::Null { break; } // end on death
+    
+                // id 1 does not stale
+                if attack != AttackKind::None { 
+                    stale_moves[stale_count] = StaleMove { attack, instance_id: hit_by_id };
+                    stale_count += 1;
+                    if stale_count == 10 { break; }
+                    prev_hit_by_id = hit_by_id;
+                }
+            }
+    
+            // for whatever reason, grabbing alters opponent's last_hit_by_hit_by_id,
+            // so we need to remove that.
+            use StandardActionState as Sas;
+            if matches!(opponent_frames[i].state, ActionState::Standard(Sas::CapturePulledHi | Sas::CapturePulledLw))
+                && stale_count != 0
+                && stale_moves[stale_count-1].instance_id == hit_by_id
+            {
+                stale_count -= 1;
+            }
         }
     }
 
