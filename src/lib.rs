@@ -259,6 +259,23 @@ impl GameInfo {
         true
     }
     
+    // does not clear name_buf before appending.
+    pub fn names<'a>(&self, name_buf: &'a mut String) -> [&'a str; 4] {
+        let mut name_idx = [(0, 0); 4];
+        for port in 0..4 {
+            let name_start = name_buf.len();
+            decode_shift_jis(&self.names[port], name_buf);
+            let name_end = name_buf.len();
+            name_idx[port] = (name_start, name_end);
+        }
+        let mut names = [""; 4];
+        for port in 0..4 {
+            let (a, b) = name_idx[port];
+            names[port] = &name_buf[a..b];
+        }
+        names
+    }
+    
     pub fn character_colour(&self, frame: &Frame) -> CharacterColour {
         let costume = self.starting_character_colours[frame.port_idx as usize].unwrap().costume_idx();
         CharacterColour::from_character_and_colour(frame.character, costume).unwrap()
