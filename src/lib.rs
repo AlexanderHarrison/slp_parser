@@ -142,7 +142,7 @@ pub fn compute_staled_moves(
 
     let mut i = frames.len();
     let mut prev_hit_by_id = u16::MAX;
-    loop {
+    'stale: loop {
         if i == 0 { break }
         i -= 1;
         
@@ -168,7 +168,7 @@ pub fn compute_staled_moves(
                 if attack != AttackKind::None { 
                     stale_moves[stale_count] = StaleMove { attack, instance_id: hit_by_id };
                     stale_count += 1;
-                    if stale_count == 10 { break; }
+                    if stale_count == 10 { break 'stale; }
                     prev_hit_by_id = hit_by_id;
                 }
             }
