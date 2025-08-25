@@ -430,7 +430,7 @@ pub struct SlpDirectoryInfo {
     pub dir_hash: u64,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 enum SlpDirEntryType {
     SlpFile,
     SlpzFile,
@@ -438,21 +438,21 @@ enum SlpDirEntryType {
     Other,
 }
 
-fn entry_type(entry: &std::fs::DirEntry, filename: &std::ffi::OsStr) -> SlpResult<SlpDirEntryType> {
-    let file_type = entry.file_type()?;
+fn entry_type(metadata: &std::fs::Metadata, filename: &std::ffi::OsStr) -> SlpDirEntryType {
+    let file_type = metadata.file_type();
     if file_type.is_file() {
         let ex = std::path::Path::new(filename).extension();
         if ex == Some(std::ffi::OsStr::new("slp")) {
-            Ok(SlpDirEntryType::SlpFile)
+            SlpDirEntryType::SlpFile
         } else if ex == Some(std::ffi::OsStr::new("slpz")) {
-            Ok(SlpDirEntryType::SlpzFile)
+            SlpDirEntryType::SlpzFile
         } else {
-            Ok(SlpDirEntryType::Other)
+            SlpDirEntryType::Other
         }
     } else if file_type.is_dir() {
-        Ok(SlpDirEntryType::Directory)
+        SlpDirEntryType::Directory
     } else {
-        Ok(SlpDirEntryType::Other)
+        SlpDirEntryType::Other
     }
 }
 
@@ -461,22 +461,29 @@ pub fn read_info_in_dir(
     path: impl AsRef<Path>,
     prev: &mut SlpDirectoryInfo
 ) -> SlpResult<()> {
+    use std::hash::{Hash, Hasher};
+    
     let path = path.as_ref();
 
     prev.slp_files.clear();
     prev.folders.clear();
-    let mut hash = 0;
+    let mut hasher = SimpleHasher(0);
 
     let mut skipped = 0usize;
 
     let mut path_buf = std::path::PathBuf::new();
     for entry in std::fs::read_dir(path)? {
         let entry = entry?;
+        let metadata = entry.metadata()?;
         let filename = entry.file_name();
-        match entry_type(&entry, &filename)? {
+        match entry_type(&metadata, &filename) {
             SlpDirEntryType::SlpFile | SlpDirEntryType::SlpzFile => {
-                hash ^= simple_hash(filename.as_os_str().as_encoded_bytes());
-
+                hasher.write(filename.as_os_str().as_encoded_bytes());
+                
+                if let Ok(modified) = metadata.modified() {
+                    modified.hash(&mut hasher);
+                }
+                
                 path_buf.clear();
                 path_buf.push(path);
                 path_buf.push(&filename);
@@ -495,7 +502,7 @@ pub fn read_info_in_dir(
                 });
             }
             SlpDirEntryType::Directory => {
-                hash ^= simple_hash(filename.as_os_str().as_encoded_bytes());
+                hasher.write(filename.as_os_str().as_encoded_bytes());
                 prev.folders.push(Folder {
                     name: filename.into_boxed_os_str(),
                 });
@@ -505,26 +512,41 @@ pub fn read_info_in_dir(
     }
 
     eprintln!("skipped {} files", skipped);
-    prev.dir_hash = hash;
+    prev.dir_hash = hasher.finish();
 
     Ok(())
 }
 
 pub fn dir_hash(path: impl AsRef<Path>) -> SlpResult<u64> {
-    let mut hash = 0;
+    use std::hash::{Hash, Hasher};
+    let mut hasher = SimpleHasher(0);
 
     for entry in std::fs::read_dir(path)? {
         let entry = entry?;
+        let metadata = entry.metadata()?;
         let filename = entry.file_name();
-        match entry_type(&entry, &filename)? {
-            SlpDirEntryType::SlpFile | SlpDirEntryType::SlpzFile | SlpDirEntryType::Directory => {
-                hash ^= simple_hash(filename.as_os_str().as_encoded_bytes());
-            }
-            SlpDirEntryType::Other => (),
+        let entry_type = entry_type(&metadata, &filename);
+        
+        if entry_type != SlpDirEntryType::Other {
+            hasher.write(filename.as_os_str().as_encoded_bytes());
+        }
+        
+        if entry_type == SlpDirEntryType::SlpFile || entry_type == SlpDirEntryType::SlpzFile {
+            let Ok(modified) = metadata.modified() else { continue; };
+            modified.hash(&mut hasher);
         }
     }
     
-    Ok(hash)
+    Ok(hasher.finish())
+}
+
+
+struct SimpleHasher(u64);
+impl std::hash::Hasher for SimpleHasher {
+    fn write(&mut self, bytes: &[u8]) {
+        self.0 ^= simple_hash(bytes);
+    }
+    fn finish(&self) -> u64 { self.0 }
 }
 
 // order independent (simple xor hash)
