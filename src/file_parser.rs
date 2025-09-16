@@ -873,18 +873,22 @@ fn parse_metadata(bytes: &[u8]) -> Metadata {
     // But we do know notes come after.
     let mut bytes = &bytes[end..];
     if let Some(i) = parse_object_header(bytes, b"notes") {
-        'find_notes: {
-            bytes = &bytes[i..];
-            
-            let (end, count) = parse_i32(bytes, b"count").unwrap();
-            if count != 0 {
-                metadata.has_notes = true;
-                break 'find_notes;
-            }
-            bytes = &bytes[end..];
+        bytes = &bytes[i..];
         
+        'find_notes: {
+            if let Some(data_i) = bytes.windows(b"data".len()).position(|w| w == b"data") {
+                let data_len = i32::from_be_bytes(bytes[data_i+b"data".len()+2..][..4].try_into().unwrap());
+                if data_len != 0 {
+                    metadata.has_notes = true;
+                    break 'find_notes;
+                }
+            }
+    
             if let Some((_, image_count)) = parse_i32(bytes, b"imageCount") {
-                if image_count != 0 { metadata.has_notes = true; }
+                if image_count != 0 {
+                    metadata.has_notes = true;
+                    break 'find_notes;
+                }
             }
         }
     }
