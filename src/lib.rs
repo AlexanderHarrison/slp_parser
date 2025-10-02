@@ -480,9 +480,9 @@ pub fn read_info_in_dir(
             SlpDirEntryType::SlpFile | SlpDirEntryType::SlpzFile => {
                 hasher.write(filename.as_os_str().as_encoded_bytes());
                 
-                if let Ok(modified) = metadata.modified() {
-                    modified.hash(&mut hasher);
-                }
+                // if let Ok(modified) = metadata.modified() {
+                //     modified.hash(&mut hasher);
+                // }
                 
                 path_buf.clear();
                 path_buf.push(path);
@@ -532,8 +532,8 @@ pub fn dir_hash(path: impl AsRef<Path>) -> SlpResult<u64> {
         }
         
         if entry_type == SlpDirEntryType::SlpFile || entry_type == SlpDirEntryType::SlpzFile {
-            let Ok(modified) = metadata.modified() else { continue; };
-            modified.hash(&mut hasher);
+            // let Ok(modified) = metadata.modified() else { continue; };
+            // modified.hash(&mut hasher);
         }
     }
     
